@@ -45,7 +45,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { height: 100%; margin: 0; }
+html, body, #app, #svelte { height: 100%; margin: 0; }
 body {
   background: var(--bg);
   color: var(--ink);
@@ -283,3 +283,6 @@ button.ghost { border: 0; background: var(--bg-2); border-radius: 10px; width: 3
   .agent-label .ctx { display: none; }
   .agent-label .bubble { width: 16px; height: 16px; font-size: 9px; }
 }
+
+/* Task cards are buttons for keyboard access. / Thẻ task là button để dùng được bằng bàn phím. */
+button.task { display: block; width: 100%; text-align: left; border: 0; font: inherit; }

@@ -9,7 +9,8 @@ Mặt bằng chia 9 khu: Backend, Frontend & Mobile, QA, Platform · DevOps, ph�
 ```bash
 npm install
 npm run dev            # http://localhost:5173
-npm run build          # dist/
+npm run check          # svelte-check (type + a11y)
+npm run build          # build/ — SPA tĩnh (adapter-static)
 npm run build:single   # dist-single/index.html — 1 file tự chứa, dùng để share preview
 ```
 
@@ -29,11 +30,15 @@ npm run build:single   # dist-single/index.html — 1 file tự chứa, dùng đ
 
 ```
 src/
-  api/contract.ts   # Contract REST + SSE với BE: GET /approvals, POST /approvals/{id}/decision, GET /events
-  api/mock.ts       # MockOfficeApi — thay bằng HttpOfficeApi khi BE sẵn sàng
-  sim/              # Orchestrator giả lập (mock data + simulator), departments.ts = mặt bằng phòng ban
-  scene/office.ts   # Scene three.js: vỏ toà nhà, phòng kính, bàn, nhân vật chibi, animation
-  components/       # React UI: top bar, sidebar tabs
+  routes/               # SvelteKit: ssr = false, SPA tĩnh qua adapter-static
+  lib/
+    components/         # UI Svelte 5 (runes): App, TopBar, OfficeCanvas, AgentPanel, ApprovalInbox, BusFeed, TaskBoard, AuditLog
+    stores/office.ts    # Svelte store bọc mock orchestrator
+    api/contract.ts     # Contract REST + SSE với BE: GET /approvals, POST /approvals/{id}/decision, GET /events
+    api/mock.ts         # MockOfficeApi — thay bằng HttpOfficeApi khi BE sẵn sàng
+    sim/                # Orchestrator giả lập (mock data + simulator), departments.ts = mặt bằng phòng ban
+    scene/              # three.js thuần: office.ts (văn phòng, nhân vật, animation), walkers.ts (đường đi)
+single/                 # Entry riêng để build preview 1 file (không qua router SvelteKit)
 ```
 
-Stack: Vite + React 19 + TypeScript + three.js (không dùng thêm UI lib).
+Stack: SvelteKit 2 + Svelte 5 + TypeScript + three.js. Scene 3D viết bằng three.js thuần (không phụ thuộc framework UI), UI viết bằng Svelte.
