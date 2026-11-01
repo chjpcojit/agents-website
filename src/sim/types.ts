@@ -1,6 +1,8 @@
 // Domain types mirroring the design doc's 6 entities (Agent, Task, Session, Message, Approval, Event).
 // Kiểu dữ liệu bám theo 6 entity trong design doc (Agent, Task, Session, Message, Approval, Event).
 
+import type { DeptId } from './departments';
+
 /** Runtime status of an agent. / Trạng thái runtime của một agent. */
 export type AgentStatus = 'working' | 'idle' | 'waiting' | 'error' | 'paused';
 
@@ -25,8 +27,10 @@ export interface Agent {
   currentTaskId: string | null;
   /** Last error message when status === 'error'. / Lỗi gần nhất khi status === 'error'. */
   lastError: string | null;
-  /** Index of the desk in the office layout. / Vị trí bàn trong layout văn phòng. */
-  desk: number;
+  /** Department the agent belongs to. / Phòng ban của agent. */
+  dept: DeptId;
+  /** Desk centre (x, z) on the floor. / Tâm bàn làm việc (x, z) trên sàn. */
+  seat: [number, number];
 }
 
 export type TaskStatus = 'queued' | 'running' | 'review' | 'done' | 'failed' | 'cancelled';

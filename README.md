@@ -1,6 +1,8 @@
 # agents-website
 
-Web UI cho hệ thống quản lý nhiều agent Claude Code. Hiện tại là **demo "Agent Office"**: văn phòng 3D mini (isometric, low-poly) với dữ liệu mock, chưa nối orchestrator.
+Web UI cho hệ thống quản lý nhiều agent Claude Code. Hiện tại là **demo "Agent Office"**: văn phòng 3D mini (isometric, low-poly, phong cách open-plan hiện đại) với dữ liệu mock, chưa nối orchestrator.
+
+Mặt bằng chia 9 khu: Backend, Frontend & Mobile, QA, Platform · DevOps, phòng Tech Lead, phòng họp (trạm office bus), server room, pantry, lounge. 9 agent ngồi theo phòng ban, có 2 bàn trống chờ agent mới. Mặt bằng khai báo ở `src/sim/departments.ts`.
 
 ## Chạy
 
@@ -28,8 +30,8 @@ npm run build:single   # dist-single/index.html — 1 file tự chứa, dùng đ
 src/
   api/contract.ts   # Contract REST + SSE với BE: GET /approvals, POST /approvals/{id}/decision, GET /events
   api/mock.ts       # MockOfficeApi — thay bằng HttpOfficeApi khi BE sẵn sàng
-  sim/              # Orchestrator giả lập (mock data + simulator)
-  scene/office.ts   # Scene three.js: phòng, bàn, nhân vật chibi, animation
+  sim/              # Orchestrator giả lập (mock data + simulator), departments.ts = mặt bằng phòng ban
+  scene/office.ts   # Scene three.js: vỏ toà nhà, phòng kính, bàn, nhân vật chibi, animation
   components/       # React UI: top bar, sidebar tabs
 ```
 

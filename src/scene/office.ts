@@ -1,9 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { DEPARTMENTS, DEPT_BY_ID, FLOOR, type Department } from '../sim/departments';
+import { EMPTY_SEATS } from '../sim/mockData';
 import type { Agent, AgentStatus, OfficeState, TaskStatus } from '../sim/types';
 
-// Low-poly isometric office built with plain three.js. Each agent is a chibi character at a desk.
-// Văn phòng isometric low-poly dựng bằng three.js thuần. Mỗi agent là một nhân vật chibi ngồi ở bàn.
+// Modern open-plan office (glass rooms, departments) built with plain three.js.
+// Each agent is a chibi character sitting at a desk in its department.
+// Văn phòng open-plan hiện đại (phòng kính, nhiều phòng ban) dựng bằng three.js thuần.
+// Mỗi agent là một nhân vật chibi ngồi ở bàn trong phòng ban của mình.
 
 export const STATUS_COLOR: Record<AgentStatus, string> = {
   working: '#5cc98a',
@@ -14,7 +18,7 @@ export const STATUS_COLOR: Record<AgentStatus, string> = {
 };
 
 const SCREEN_COLOR: Record<AgentStatus, string> = {
-  working: '#9fe7ff',
+  working: '#8fdcff',
   idle: '#3b4660',
   waiting: '#ffd98a',
   error: '#ff8a8f',
@@ -29,59 +33,113 @@ const STATUS_EMOJI: Record<AgentStatus, string> = {
   paused: '⏸️',
 };
 
-/** Desk anchor positions (x, z). / Toạ độ đặt bàn (x, z). */
-const DESKS: [number, number][] = [
-  [-5.4, -3.0], [-0.4, -3.0], [4.6, -3.0],
-  [-5.4, 2.4], [-0.4, 2.4], [4.6, 2.4],
-];
+// Palette for the modern look. / Bảng màu cho phong cách hiện đại.
+const C = {
+  floor: '#e9eaee',
+  wall: '#f7f7f8',
+  frame: '#3b404c',
+  deskTop: '#fbfbfa',
+  wood: '#d9b48a',
+  woodDark: '#b88c62',
+  metal: '#2f333d',
+  chair: '#40444f',
+  glass: '#cfe6ff',
+  sky: '#bfe3ff',
+} as const;
 
 const matCache = new Map<string, THREE.MeshStandardMaterial>();
 /** Shared flat-shaded material per colour. / Material flat-shaded dùng chung theo màu. */
-function mat(color: string, opts: { emissive?: string; rough?: number } = {}): THREE.MeshStandardMaterial {
-  const key = `${color}|${opts.emissive ?? ''}|${opts.rough ?? ''}`;
+function mat(color: string, rough = 0.8): THREE.MeshStandardMaterial {
+  const key = `${color}|${rough}`;
   let m = matCache.get(key);
   if (!m) {
-    m = new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: opts.rough ?? 0.85, metalness: 0 });
-    if (opts.emissive) {
-      m.emissive = new THREE.Color(opts.emissive);
-      m.emissiveIntensity = 0.9;
-    }
+    m = new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: rough, metalness: 0 });
     matCache.set(key, m);
   }
   return m;
 }
 
-function box(w: number, h: number, d: number, color: string, x = 0, y = 0, z = 0): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
+const glassMat = new THREE.MeshStandardMaterial({ color: C.glass, transparent: true, opacity: 0.22, roughness: 0.1, depthWrite: false });
+
+function box(w: number, h: number, d: number, color: string, x = 0, y = 0, z = 0, rough = 0.8): THREE.Mesh {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, rough));
   m.position.set(x, y, z);
   m.castShadow = true;
   m.receiveShadow = true;
   return m;
 }
 
-function cyl(rt: number, rb: number, h: number, color: string, seg = 10): THREE.Mesh {
+function cyl(rt: number, rb: number, h: number, color: string, seg = 12): THREE.Mesh {
   const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat(color));
   m.castShadow = true;
   m.receiveShadow = true;
   return m;
 }
 
+/** Tall modern planter (white pot, layered leaves). / Chậu cây hiện đại (chậu trắng, lá nhiều tầng). */
 function plant(x: number, z: number, scale = 1): THREE.Group {
   const g = new THREE.Group();
-  const pot = cyl(0.35, 0.28, 0.5, '#e98b6d', 8);
-  pot.position.y = 0.25;
+  const pot = cyl(0.36, 0.3, 0.7, '#f2f2f0', 12);
+  pot.position.y = 0.35;
   g.add(pot);
-  const leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 0), mat('#6fbf73'));
-  leaves.position.y = 0.95;
-  leaves.castShadow = true;
-  g.add(leaves);
-  const top = new THREE.Mesh(new THREE.IcosahedronGeometry(0.35, 0), mat('#86d38a'));
-  top.position.set(0.15, 1.35, 0.05);
-  top.castShadow = true;
-  g.add(top);
+  const greens = ['#5fb36b', '#73c27c', '#4fa25c'];
+  const layers: [number, number, number, number][] = [[0, 1.1, 0, 0.55], [0.2, 1.55, 0.1, 0.42], [-0.15, 1.85, -0.05, 0.32]];
+  layers.forEach(([px, py, pz, r], i) => {
+    const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), mat(greens[i % 3] ?? '#5fb36b'));
+    leaf.position.set(px, py, pz);
+    leaf.castShadow = true;
+    g.add(leaf);
+  });
   g.position.set(x, 0, z);
   g.scale.setScalar(scale);
   return g;
+}
+
+/** Office chair (dark mesh, 5-star base). / Ghế văn phòng (lưới tối, chân sao 5 cánh). */
+function officeChair(color: string = C.chair): THREE.Group {
+  const chair = new THREE.Group();
+  chair.add(box(0.95, 0.16, 0.9, color, 0, 0.95, 0));
+  chair.add(box(0.95, 1.05, 0.12, color, 0, 1.6, -0.45));
+  const stem = cyl(0.06, 0.06, 0.8, C.metal, 6);
+  stem.position.y = 0.45;
+  chair.add(stem);
+  for (let i = 0; i < 5; i++) {
+    const leg = box(0.5, 0.06, 0.08, C.metal, 0, 0.08, 0);
+    leg.rotation.y = (i / 5) * Math.PI * 2;
+    leg.translateX(0.22);
+    chair.add(leg);
+  }
+  return chair;
+}
+
+/** Modern desk: white top, black frame legs, monitor + keyboard. / Bàn hiện đại: mặt trắng, chân khung đen, màn hình + bàn phím. */
+function modernDesk(): { group: THREE.Group; screen: THREE.Mesh; screenMat: THREE.MeshStandardMaterial } {
+  const g = new THREE.Group();
+  g.add(box(2.8, 0.1, 1.4, C.deskTop, 0, 1.45, 0, 0.5));
+  for (const lx of [-1.3, 1.3]) {
+    g.add(box(0.07, 1.4, 0.07, C.metal, lx, 0.7, -0.6));
+    g.add(box(0.07, 1.4, 0.07, C.metal, lx, 0.7, 0.6));
+    g.add(box(0.07, 0.07, 1.25, C.metal, lx, 0.15, 0));
+  }
+  g.add(box(2.6, 0.05, 0.05, C.metal, 0, 1.35, 0.6)); // modesty bar / thanh chắn
+
+  // Monitor sits on the left corner, angled towards the character, so the face stays visible from the camera.
+  // Màn hình đặt ở góc trái, xoay chéo về phía nhân vật, để camera vẫn thấy mặt nhân vật.
+  const mon = new THREE.Group();
+  mon.position.set(-0.75, 0, 0.25);
+  mon.rotation.y = -0.55;
+  mon.add(box(0.07, 0.36, 0.07, C.metal, 0, 1.68, 0.05));
+  mon.add(box(0.36, 0.03, 0.26, C.metal, 0, 1.51, 0.05));
+  mon.add(box(1.05, 0.62, 0.06, '#1f222a', 0, 2.1, 0));
+  const screenMat = new THREE.MeshStandardMaterial({ color: '#111111', emissive: new THREE.Color('#8fdcff'), emissiveIntensity: 0.9 });
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.52), screenMat);
+  screen.position.set(0, 2.1, -0.035);
+  screen.rotation.y = Math.PI;
+  mon.add(screen);
+  g.add(mon);
+  g.add(box(0.9, 0.04, 0.3, '#e4e6ec', 0.1, 1.52, -0.2)); // keyboard / bàn phím
+  g.add(box(0.14, 0.04, 0.2, '#e4e6ec', 0.65, 1.52, -0.15)); // mouse / chuột
+  return { group: g, screen, screenMat };
 }
 
 interface CharacterRig {
@@ -91,7 +149,6 @@ interface CharacterRig {
   head: THREE.Group;
   armL: THREE.Mesh;
   armR: THREE.Mesh;
-  screen: THREE.Mesh;
   screenMat: THREE.MeshStandardMaterial;
   ring: THREE.Mesh;
   ringMat: THREE.MeshBasicMaterial;
@@ -102,67 +159,28 @@ interface CharacterRig {
 
 /** Build desk + chair + chibi character for one agent. / Dựng bàn + ghế + nhân vật chibi cho một agent. */
 function buildWorkstation(agent: Agent): Omit<CharacterRig, 'label'> {
-  const [x, z] = DESKS[agent.desk] ?? [0, 0];
+  const [x, z] = agent.seat;
   const root = new THREE.Group();
   root.position.set(x, 0, z);
 
-  // Rug + status ring on the floor. / Thảm + vòng trạng thái dưới sàn.
-  const rug = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.04, 28), mat('#efe1cf'));
-  rug.position.set(0, 0.02, -0.4);
-  rug.receiveShadow = true;
-  root.add(rug);
+  // Status ring on the floor under the chair. / Vòng trạng thái dưới chân ghế.
   const ringMat = new THREE.MeshBasicMaterial({ color: STATUS_COLOR[agent.status], transparent: true, opacity: 0.85 });
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.07, 6, 40), ringMat);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.06, 6, 40), ringMat);
   ring.rotation.x = -Math.PI / 2;
-  ring.position.set(0, 0.07, -0.9);
+  ring.position.set(0, 0.06, -1.05);
   root.add(ring);
 
-  // Desk (in front, towards camera) / Bàn (phía trước, hướng camera).
-  root.add(box(2.8, 0.16, 1.4, '#e8c39e', 0, 1.42, 0));
-  for (const [lx, lz] of [[-1.25, -0.55], [1.25, -0.55], [-1.25, 0.55], [1.25, 0.55]] as const) {
-    root.add(box(0.12, 1.34, 0.12, '#c99d75', lx, 0.67, lz));
-  }
-  root.add(box(0.9, 0.7, 1.2, '#d9ae86', 1.0, 0.8, 0)); // drawer / tủ ngăn kéo
-
-  // Laptop facing the character (back of lid faces camera). / Laptop hướng về nhân vật (mặt lưng hướng camera).
-  root.add(box(1.0, 0.05, 0.65, '#cfd4e0', -0.1, 1.53, -0.15));
-  const lid = new THREE.Group();
-  lid.position.set(-0.1, 1.55, 0.15);
-  lid.rotation.x = 0.28;
-  lid.add(box(1.0, 0.68, 0.05, '#aeb6c8', 0, 0.34, 0));
-  const screenMat = new THREE.MeshStandardMaterial({ color: '#202533', emissive: new THREE.Color(SCREEN_COLOR[agent.status]), emissiveIntensity: 0.9, flatShading: true });
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.88, 0.56), screenMat);
-  screen.position.set(0, 0.34, -0.03);
-  screen.rotation.y = Math.PI;
-  lid.add(screen);
-  // Apple-ish sticker in agent colour on the lid back. / Sticker màu agent ở lưng laptop.
-  const sticker = new THREE.Mesh(new THREE.CircleGeometry(0.1, 12), mat(agent.color));
-  sticker.position.set(0, 0.36, 0.03);
-  lid.add(sticker);
-  root.add(lid);
-
-  // Mug + mini plant + nameplate. / Cốc + chậu cây mini + bảng tên.
-  const mug = cyl(0.12, 0.11, 0.24, '#ffffff', 10);
-  mug.position.set(0.95, 1.62, 0.25);
+  const { group: desk, screenMat } = modernDesk();
+  root.add(desk);
+  const mug = cyl(0.11, 0.1, 0.22, agent.color, 10);
+  mug.position.set(0.55, 1.61, 0.3);
   root.add(mug);
-  const mini = plant(-1.1, 0.3, 0.35);
+  const mini = plant(1.0, 0.35, 0.3);
   mini.position.y = 1.5;
   root.add(mini);
-  root.add(box(0.7, 0.18, 0.06, agent.color, 0.3, 1.58, 0.62));
 
-  // Chair behind the desk. / Ghế phía sau bàn.
-  const chair = new THREE.Group();
+  const chair = officeChair();
   chair.position.set(0, 0, -1.05);
-  const seat = cyl(0.62, 0.62, 0.2, '#6c6a86', 14);
-  seat.position.y = 0.95;
-  chair.add(seat);
-  const stem = cyl(0.08, 0.08, 0.8, '#4b4a5e', 6);
-  stem.position.y = 0.45;
-  chair.add(stem);
-  const baseC = cyl(0.5, 0.55, 0.08, '#4b4a5e', 5);
-  baseC.position.y = 0.06;
-  chair.add(baseC);
-  chair.add(box(1.1, 1.0, 0.18, '#6c6a86', 0, 1.6, -0.5));
   root.add(chair);
 
   // Character (chibi: big head, small body). / Nhân vật chibi: đầu to, thân nhỏ.
@@ -206,6 +224,11 @@ function buildWorkstation(agent: Agent): Omit<CharacterRig, 'label'> {
   mouth.position.set(0, -0.17, 0.53);
   mouth.rotation.z = Math.PI;
   head.add(mouth);
+  // Headphones for a modern dev vibe. / Tai nghe cho đúng chất dev hiện đại.
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.05, 6, 16, Math.PI), mat(C.metal));
+  band.position.y = 0.05;
+  head.add(band);
+  for (const hx of [-0.6, 0.6]) head.add(box(0.12, 0.26, 0.26, C.metal, hx, 0.02, 0));
   body.add(head);
   root.add(body);
 
@@ -213,118 +236,237 @@ function buildWorkstation(agent: Agent): Omit<CharacterRig, 'label'> {
   root.traverse((o) => (o.userData.agentId = agent.id));
 
   return {
-    agentId: agent.id, root, body, head, armL, armR, screen, screenMat, ring, ringMat,
+    agentId: agent.id, root, body, head, armL, armR, screenMat, ring, ringMat,
     anchor: new THREE.Vector3(x, 3.75, z - 1.05), phase: Math.random() * Math.PI * 2,
   };
 }
 
-/** Static room: floor, walls, windows, coffee corner, server rack, meeting table, task whiteboard. / Phòng tĩnh: sàn, tường, cửa sổ, góc cà phê, tủ server, bàn họp, bảng task. */
-function buildRoom(scene: THREE.Scene): { leds: THREE.Mesh[]; notes: THREE.Mesh[]; hub: THREE.Group } {
-  const W = 22;
-  const D = 16;
-  const floor = box(W, 0.4, D, '#f6eadb', 0, -0.2, 0);
-  scene.add(floor);
-  // Checker tiles for a cozy feel. / Gạch caro cho cảm giác ấm cúng.
-  const tileGeo = new THREE.PlaneGeometry(1.98, 1.98);
-  const tileMat = new THREE.MeshStandardMaterial({ color: '#efdcc6', roughness: 1 });
-  for (let i = 0; i < W / 2; i++) {
-    for (let j = 0; j < D / 2; j++) {
-      if ((i + j) % 2) continue;
-      const t = new THREE.Mesh(tileGeo, tileMat);
-      t.rotation.x = -Math.PI / 2;
-      t.position.set(-W / 2 + 1 + i * 2, 0.005, -D / 2 + 1 + j * 2);
-      t.receiveShadow = true;
-      scene.add(t);
+/** Axis-aligned glass partition, with an optional door gap at offset `door`. / Vách kính song song trục, có thể chừa cửa tại vị trí `door`. */
+function glassWall(scene: THREE.Scene, x0: number, z0: number, x1: number, z1: number, door?: number): void {
+  const H = 3.0;
+  const alongX = Math.abs(z1 - z0) < 1e-6;
+  const len = alongX ? x1 - x0 : z1 - z0;
+  const segments: [number, number][] = door === undefined ? [[0, len]] : [[0, door - 0.9], [door + 0.9, len]];
+  for (const [a, b] of segments) {
+    const w = b - a;
+    if (w < 0.05) continue;
+    const mid = (a + b) / 2;
+    const cx = alongX ? x0 + mid : x0;
+    const cz = alongX ? z0 : z0 + mid;
+    const pane = new THREE.Mesh(new THREE.BoxGeometry(alongX ? w : 0.06, H, alongX ? 0.06 : w), glassMat);
+    pane.position.set(cx, H / 2, cz);
+    scene.add(pane);
+    // Thin aluminium frame: top rail, bottom rail, posts. / Khung nhôm mảnh: ray trên, ray dưới, trụ.
+    scene.add(box(alongX ? w : 0.09, 0.09, alongX ? 0.09 : w, C.frame, cx, H, cz));
+    scene.add(box(alongX ? w : 0.09, 0.09, alongX ? 0.09 : w, C.frame, cx, 0.05, cz));
+    const posts = Math.max(1, Math.round(w / 2.2));
+    for (let i = 0; i <= posts; i++) {
+      const t = a + (w * i) / posts;
+      scene.add(box(0.08, H, 0.08, C.frame, alongX ? x0 + t : x0, H / 2, alongX ? z0 : z0 + t));
+    }
+  }
+}
+
+function carpet(scene: THREE.Scene, d: Department, inset: number): void {
+  const [x0, z0, x1, z1] = d.rect;
+  const c = new THREE.Color(d.accent).lerp(new THREE.Color('#ffffff'), 0.45);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0 - inset * 2, 0.04, z1 - z0 - inset * 2), new THREE.MeshStandardMaterial({ color: c, roughness: 1 }));
+  m.position.set((x0 + x1) / 2, 0.02, (z0 + z1) / 2);
+  m.receiveShadow = true;
+  scene.add(m);
+}
+
+/** Static floor plan: shell, departments, furniture. / Mặt bằng tĩnh: vỏ toà nhà, phòng ban, nội thất. */
+function buildOffice(scene: THREE.Scene): { leds: THREE.Mesh[]; notes: THREE.Mesh[]; hub: THREE.Vector3; tv: THREE.MeshBasicMaterial } {
+  const { x0, x1, z0, z1 } = FLOOR;
+  const W = x1 - x0;
+  const D = z1 - z0;
+
+  // Polished concrete floor + slab edge. / Sàn bê tông mài + viền sàn.
+  scene.add(box(W, 0.5, D, C.floor, 0, -0.25, 0, 0.6));
+  scene.add(box(W + 0.3, 0.2, D + 0.3, '#cfd2d9', 0, -0.55, 0));
+
+  // Outer walls with floor-to-ceiling windows. / Tường ngoài với cửa kính kịch trần.
+  const WH = 5.2;
+  scene.add(box(W, WH, 0.3, C.wall, 0, WH / 2, z0 - 0.15));
+  scene.add(box(0.3, WH, D, C.wall, x0 - 0.15, WH / 2, 0));
+  const skyMat = new THREE.MeshBasicMaterial({ color: C.sky });
+  for (let wx = x0 + 9; wx < x1 - 2; wx += 3) {
+    const sky = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 3.8), skyMat);
+    sky.position.set(wx + 1.5, 2.5, z0 + 0.01);
+    scene.add(sky);
+    scene.add(box(0.12, 3.9, 0.1, C.frame, wx, 2.5, z0 + 0.05));
+  }
+  for (let wz = z0 + 15; wz < z1 - 2; wz += 3) {
+    const sky = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 3.8), skyMat);
+    sky.rotation.y = Math.PI / 2;
+    sky.position.set(x0 + 0.01, 2.5, wz + 1.5);
+    scene.add(sky);
+    scene.add(box(0.1, 3.9, 0.12, C.frame, x0 + 0.05, 2.5, wz));
+  }
+
+  // Department floors: carpet for open-plan, glass for enclosed rooms. / Sàn phòng ban: thảm cho open-plan, kính cho phòng kín.
+  for (const d of DEPARTMENTS) {
+    const [rx0, rz0, rx1, rz1] = d.rect;
+    if (d.id === 'pantry' || d.id === 'lounge') {
+      // Warm wood floor for social areas. / Sàn gỗ ấm cho khu sinh hoạt.
+      const wood = box(rx1 - rx0 - 0.2, 0.04, rz1 - rz0 - 0.2, d.id === 'pantry' ? '#ead3b0' : '#e4d6c3', (rx0 + rx1) / 2, 0.02, (rz0 + rz1) / 2);
+      wood.castShadow = false;
+      scene.add(wood);
+      continue;
+    }
+    carpet(scene, d, d.enclosed ? 0.1 : 0.4);
+    if (d.enclosed) {
+      // Front wall (towards camera) gets the door. / Vách trước (hướng camera) có cửa.
+      glassWall(scene, rx0, rz1, rx1, rz1, (rx1 - rx0) / 2);
+      if (rx1 < x1) glassWall(scene, rx1, rz0, rx1, rz1);
+      if (rx0 > x0) glassWall(scene, rx0, rz0, rx0, rz1);
     }
   }
 
-  const back = box(W, 5.2, 0.4, '#fde4cf', 0, 2.6, -D / 2 - 0.2);
-  const left = box(0.4, 5.2, D, '#fbd6c0', -W / 2 - 0.2, 2.6, 0);
-  scene.add(back, left);
-  scene.add(box(W, 0.35, 0.5, '#f2c6a8', 0, 0.17, -D / 2 + 0.05)); // baseboard / chân tường
-  scene.add(box(0.5, 0.35, D, '#eebba0', -W / 2 + 0.05, 0.17, 0));
-
-  // Windows with sky. / Cửa sổ nhìn ra trời.
-  for (const wx of [-4, 2.5, 8]) {
-    scene.add(box(3.2, 2.4, 0.15, '#ffffff', wx, 3.0, -D / 2 + 0.02));
-    const sky = new THREE.Mesh(new THREE.PlaneGeometry(2.9, 2.1), new THREE.MeshBasicMaterial({ color: '#bfe6ff' }));
-    sky.position.set(wx, 3.0, -D / 2 + 0.11);
-    scene.add(sky);
-    const cloud = new THREE.Mesh(new THREE.CircleGeometry(0.35, 10), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
-    cloud.position.set(wx - 0.5, 3.4, -D / 2 + 0.12);
-    cloud.scale.set(1.8, 1, 1);
-    scene.add(cloud);
-    scene.add(box(0.08, 2.1, 0.06, '#ffffff', wx, 3.0, -D / 2 + 0.14));
+  // --- Meeting room = office bus hub. / Phòng họp = trạm office bus. ---
+  const meet = DEPT_BY_ID.meeting.rect;
+  const mx = (meet[0] + meet[2]) / 2;
+  const mz = (meet[1] + meet[3]) / 2 + 0.3;
+  scene.add(box(4.2, 0.12, 1.7, C.wood, mx, 1.35, mz, 0.5));
+  scene.add(box(0.15, 1.3, 1.2, C.metal, mx - 1.6, 0.65, mz));
+  scene.add(box(0.15, 1.3, 1.2, C.metal, mx + 1.6, 0.65, mz));
+  for (const cx of [-1.3, 0, 1.3]) {
+    for (const side of [-1, 1]) {
+      const ch = officeChair('#f4b26b');
+      ch.position.set(mx + cx, 0, mz + side * 1.35);
+      ch.rotation.y = side > 0 ? Math.PI : 0;
+      ch.scale.setScalar(0.8);
+      scene.add(ch);
+    }
   }
+  // Wall TV showing the bus. / TV treo tường hiển thị office bus.
+  scene.add(box(3.4, 1.9, 0.1, '#16181f', mx, 3.1, meet[1] + 0.12));
+  const tv = new THREE.MeshBasicMaterial({ color: '#7cc4ff' });
+  const tvScreen = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.7), tv);
+  tvScreen.position.set(mx, 3.1, meet[1] + 0.18);
+  scene.add(tvScreen);
+  const mailbox = new THREE.Group();
+  mailbox.position.set(mx, 1.41, mz);
+  mailbox.add(box(0.6, 0.45, 0.42, '#ef6b73', 0, 0.23, 0));
+  mailbox.add(box(0.05, 0.36, 0.05, '#f6c453', 0.36, 0.45, 0));
+  scene.add(mailbox);
+  scene.add(plant(meet[2] - 0.7, meet[1] + 0.7, 1.0));
 
-  // Task board on the left wall — sticky notes reflect task status. / Bảng task trên tường trái — giấy note phản ánh trạng thái task.
-  scene.add(box(0.12, 2.6, 5.2, '#ffffff', -W / 2 + 0.08, 2.9, -2));
-  scene.add(box(0.14, 2.8, 5.4, '#c8b49e', -W / 2 + 0.04, 2.9, -2));
+  // --- Tech Lead office: bookshelf, armchair, plant. / Phòng Tech Lead: kệ sách, ghế bành, cây. ---
+  const lead = DEPT_BY_ID.lead.rect;
+  scene.add(box(2.4, 2.8, 0.5, C.woodDark, lead[0] + 1.6, 1.4, lead[1] + 0.35));
+  const bookColors = ['#ef6b73', '#7aa7e8', '#f6c453', '#5cc98a', '#b59ae8'];
+  for (let shelf = 0; shelf < 3; shelf++) {
+    for (let b = 0; b < 6; b++) {
+      scene.add(box(0.22, 0.55, 0.3, bookColors[(b + shelf) % bookColors.length] ?? '#cccccc', lead[0] + 0.8 + b * 0.32, 0.5 + shelf * 0.85, lead[1] + 0.55));
+    }
+  }
+  scene.add(box(1.2, 0.6, 1.1, '#6c6a86', lead[2] - 1.2, 0.5, lead[1] + 1.2));
+  scene.add(box(1.2, 1.0, 0.25, '#5b5975', lead[2] - 1.2, 1.0, lead[1] + 0.7));
+  scene.add(plant(lead[2] - 0.6, lead[3] - 0.7, 0.9));
+
+  // --- Server room: racks with blinking LEDs. / Server room: tủ rack với LED nhấp nháy. ---
+  const srv = DEPT_BY_ID.server.rect;
+  const leds: THREE.Mesh[] = [];
+  const ledGeo = new THREE.BoxGeometry(0.12, 0.07, 0.02);
+  for (let r = 0; r < 3; r++) {
+    const rx = srv[0] + 1.3 + r * 1.7;
+    const rz = srv[1] + 2.0;
+    scene.add(box(1.2, 3.4, 1.0, '#2c2f3a', rx, 1.7, rz, 0.4));
+    for (let i = 0; i < 7; i++) {
+      for (let j = 0; j < 3; j++) {
+        const led = new THREE.Mesh(ledGeo, new THREE.MeshBasicMaterial({ color: '#5cc98a' }));
+        led.position.set(rx - 0.3 + j * 0.3, 0.6 + i * 0.4, rz + 0.51);
+        scene.add(led);
+        leds.push(led);
+      }
+    }
+  }
+  scene.add(box(5.2, 0.5, 0.6, '#9aa6c7', (srv[0] + srv[2]) / 2, 4.2, srv[1] + 0.4)); // cooling unit / máy lạnh
+
+  // --- Task board on the QA wall (sticky notes mirror task status). / Bảng task trên tường QA (giấy note phản ánh trạng thái task). ---
+  const qa = DEPT_BY_ID.qa.rect;
+  const bz = (qa[1] + qa[3]) / 2;
+  scene.add(box(0.1, 2.4, 5.0, '#ffffff', x0 + 0.06, 2.8, bz));
+  scene.add(box(0.06, 2.6, 5.2, C.frame, x0 + 0.02, 2.8, bz));
   const notes: THREE.Mesh[] = [];
-  const noteGeo = new THREE.PlaneGeometry(0.62, 0.55);
+  const noteGeo = new THREE.PlaneGeometry(0.6, 0.52);
   for (let i = 0; i < 18; i++) {
     const n = new THREE.Mesh(noteGeo, new THREE.MeshStandardMaterial({ color: '#ffe680', roughness: 1 }));
     const col = Math.floor(i / 6);
     const row = i % 6;
-    n.position.set(-W / 2 + 0.16, 3.85 - (row % 3) * 0.7, -4.1 + col * 1.55 + (row >= 3 ? 0.72 : 0));
+    n.position.set(x0 + 0.13, 3.7 - (row % 3) * 0.66, bz - 2.1 + col * 1.5 + (row >= 3 ? 0.7 : 0));
     n.rotation.y = Math.PI / 2;
     n.rotation.z = (Math.random() - 0.5) * 0.15;
     scene.add(n);
     notes.push(n);
   }
 
-  // Coffee corner. / Góc cà phê.
-  scene.add(box(3.4, 1.5, 1.2, '#9ad0c2', -9.1, 0.75, -6.9));
-  scene.add(box(3.5, 0.1, 1.3, '#ffffff', -9.1, 1.55, -6.9));
-  scene.add(box(0.8, 1.0, 0.7, '#5b5f73', -9.8, 2.1, -7.0));
-  scene.add(box(0.5, 0.2, 0.2, '#ef6b73', -9.8, 2.45, -6.62));
-  const kettle = cyl(0.22, 0.28, 0.5, '#f6c453', 10);
-  kettle.position.set(-8.5, 1.85, -6.9);
-  scene.add(kettle);
-
-  // Server rack with blinking LEDs (orchestrator box). / Tủ server với đèn LED nhấp nháy (máy chạy orchestrator).
-  scene.add(box(1.4, 3.4, 1.1, '#3d3f52', 9.6, 1.7, -7.0));
-  const leds: THREE.Mesh[] = [];
-  for (let i = 0; i < 6; i++) {
-    for (let j = 0; j < 3; j++) {
-      const led = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.02), new THREE.MeshBasicMaterial({ color: '#5cc98a' }));
-      led.position.set(9.25 + j * 0.3, 0.7 + i * 0.45, -6.43);
-      scene.add(led);
-      leds.push(led);
-    }
+  // --- Pantry: kitchen counter, fridge, coffee, high table. / Pantry: quầy bếp, tủ lạnh, cà phê, bàn cao. ---
+  const pan = DEPT_BY_ID.pantry.rect;
+  scene.add(box(0.9, 1.4, 4.6, '#ffffff', x0 + 0.5, 0.7, pan[1] + 3.2));
+  scene.add(box(1.0, 0.08, 4.7, C.frame, x0 + 0.5, 1.44, pan[1] + 3.2));
+  scene.add(box(1.0, 3.0, 1.0, '#dfe3ea', x0 + 0.55, 1.5, pan[1] + 0.6));
+  scene.add(box(0.6, 0.75, 0.55, C.metal, x0 + 0.55, 1.85, pan[1] + 2.4));
+  scene.add(box(0.3, 0.1, 0.2, '#ef6b73', x0 + 0.9, 2.1, pan[1] + 2.4));
+  const bowl = cyl(0.35, 0.25, 0.18, '#f2f2f0');
+  bowl.position.set(x0 + 0.5, 1.58, pan[1] + 4.2);
+  scene.add(bowl);
+  const htx = (pan[0] + pan[2]) / 2 + 1.2;
+  const htz = (pan[1] + pan[3]) / 2;
+  const top = cyl(1.0, 1.0, 0.1, C.wood, 20);
+  top.position.set(htx, 1.6, htz);
+  scene.add(top);
+  const stem = cyl(0.08, 0.3, 1.55, C.metal, 8);
+  stem.position.set(htx, 0.78, htz);
+  scene.add(stem);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    const sx = htx + Math.cos(a) * 1.35;
+    const sz = htz + Math.sin(a) * 1.35;
+    const stool = cyl(0.3, 0.3, 0.1, '#f4b26b');
+    stool.position.set(sx, 1.1, sz);
+    scene.add(stool);
+    const leg = cyl(0.04, 0.04, 1.05, C.metal, 6);
+    leg.position.set(sx, 0.53, sz);
+    scene.add(leg);
   }
 
-  // Meeting table = office bus hub (envelopes pass by here). / Bàn họp = trạm office bus (phong thư bay qua đây).
-  const hub = new THREE.Group();
-  hub.position.set(8.4, 0, 5.4);
-  const top = cyl(1.5, 1.5, 0.16, '#f3d2a2', 20);
-  top.position.y = 1.35;
-  hub.add(top);
-  const leg = cyl(0.18, 0.4, 1.3, '#c99d75', 8);
-  leg.position.y = 0.65;
-  hub.add(leg);
-  const mailbox = new THREE.Group();
-  mailbox.position.y = 1.43;
-  mailbox.add(box(0.7, 0.55, 0.5, '#ef6b73', 0, 0.3, 0));
-  const flag = box(0.06, 0.4, 0.06, '#f6c453', 0.42, 0.55, 0);
-  mailbox.add(flag);
-  hub.add(mailbox);
-  for (const [sx, sz] of [[-1.9, 0], [1.9, 0], [0, 1.9], [0, -1.9]] as const) {
-    const stool = cyl(0.4, 0.4, 0.7, '#9ad0c2', 10);
-    stool.position.set(sx, 0.35, sz);
-    hub.add(stool);
+  // --- Lounge: sofa, coffee table, beanbags, ping-pong table. / Lounge: sofa, bàn trà, ghế lười, bàn bóng bàn. ---
+  const lou = DEPT_BY_ID.lounge.rect;
+  const sx = lou[0] + 4;
+  const sz = lou[3] - 1.4;
+  scene.add(box(4.0, 0.6, 1.2, '#7fb7a6', sx, 0.4, sz));
+  scene.add(box(4.0, 1.0, 0.3, '#6aa392', sx, 0.95, sz + 0.5));
+  scene.add(box(0.3, 0.8, 1.2, '#6aa392', sx - 2.0, 0.6, sz));
+  scene.add(box(0.3, 0.8, 1.2, '#6aa392', sx + 2.0, 0.6, sz));
+  const rug = cyl(2.4, 2.4, 0.03, '#f3ead9', 28);
+  rug.position.set(sx, 0.05, sz - 2.2);
+  scene.add(rug);
+  scene.add(box(1.8, 0.45, 1.0, C.wood, sx, 0.35, sz - 2.2));
+  const beans: [number, number, string][] = [[sx - 2.4, sz - 3.2, '#f6c453'], [sx + 2.3, sz - 3.0, '#ef8f9f']];
+  for (const [bx, bz2, col] of beans) {
+    const bean = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), mat(col));
+    bean.scale.set(1, 0.65, 1);
+    bean.position.set(bx, 0.45, bz2);
+    bean.castShadow = true;
+    scene.add(bean);
   }
-  scene.add(hub);
+  const ppx = lou[2] - 4.5;
+  const ppz = (lou[1] + lou[3]) / 2;
+  scene.add(box(4.2, 0.1, 2.3, '#3d8f6e', ppx, 1.2, ppz, 0.5));
+  scene.add(box(0.04, 0.12, 2.3, '#ffffff', ppx, 1.27, ppz));
+  scene.add(box(0.05, 0.3, 2.5, C.metal, ppx, 1.38, ppz));
+  for (const lx of [-1.8, 1.8]) for (const lz of [-0.9, 0.9]) scene.add(box(0.1, 1.15, 0.1, C.metal, ppx + lx, 0.58, ppz + lz));
 
-  // Sofa + plants. / Sofa + cây xanh.
-  // Sofa against the left wall, facing into the room. / Sofa sát tường trái, quay vào phòng.
-  scene.add(box(1.2, 0.7, 3.2, '#b59ae8', -9.9, 0.45, 5.4));
-  scene.add(box(0.35, 1.0, 3.2, '#a185da', -10.55, 1.0, 5.4));
-  scene.add(box(1.2, 0.9, 0.35, '#a185da', -9.9, 0.65, 3.9));
-  scene.add(box(1.2, 0.9, 0.35, '#a185da', -9.9, 0.65, 6.9));
-  scene.add(plant(-10.1, 7.4, 1.2), plant(10.2, -4.2, 1.2), plant(-10.1, 2.6, 1.0), plant(5.6, -7.1, 1.0), plant(4.2, 7.3, 1.1));
+  // Plants along the windows and aisles. / Cây xanh dọc cửa kính và lối đi.
+  scene.add(
+    plant(x0 + 0.8, 4.5, 1.2), plant(-7.6, -3.5, 1.0), plant(4.6, -3.5, 0.9), plant(14.2, -3.4, 1.1),
+    plant(14.2, 4.6, 1.3), plant(-4.6, 10.2, 1.2), plant(lou[0] + 0.8, lou[1] + 0.8, 1.0),
+  );
 
-  return { leds, notes, hub };
+  return { leds, notes, hub: new THREE.Vector3(mx, 2.2, mz), tv };
 }
 
 const NOTE_COLOR: Partial<Record<TaskStatus, string>> = {
@@ -355,24 +497,50 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
   container.appendChild(labelLayer);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 200);
-  camera.position.set(22, 20, 22);
+  const camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 300);
+  camera.position.set(30, 27, 30);
   camera.lookAt(0, 0, 0);
 
-  scene.add(new THREE.HemisphereLight('#fff6ea', '#d8c7ff', 1.6));
-  const sun = new THREE.DirectionalLight('#fff1dc', 2.2);
-  sun.position.set(10, 18, 8);
+  scene.add(new THREE.HemisphereLight('#ffffff', '#dfe3f0', 1.7));
+  const sun = new THREE.DirectionalLight('#fff4e6', 2.1);
+  sun.position.set(14, 24, 10);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -16;
-  sun.shadow.camera.right = 16;
-  sun.shadow.camera.top = 16;
-  sun.shadow.camera.bottom = -16;
+  sun.shadow.camera.left = -24;
+  sun.shadow.camera.right = 24;
+  sun.shadow.camera.top = 24;
+  sun.shadow.camera.bottom = -24;
   sun.shadow.bias = -0.0008;
-  sun.shadow.radius = 4;
   scene.add(sun);
 
-  const { leds, notes, hub } = buildRoom(scene);
+  const { leds, notes, hub, tv } = buildOffice(scene);
+
+  // Empty desks = room to "hire" more agents (screens off). / Bàn trống = chỗ cho agent mới (màn hình tắt).
+  for (const [ex, ez] of EMPTY_SEATS) {
+    const { group, screen } = modernDesk();
+    screen.material = mat('#2a2d36');
+    group.position.set(ex, 0, ez);
+    scene.add(group);
+    const ch = officeChair();
+    ch.position.set(ex, 0, ez - 1.05);
+    scene.add(ch);
+  }
+
+  // Department signs (DOM overlay, crisp text). / Biển tên phòng ban (DOM overlay, chữ sắc nét).
+  const deptLabels = DEPARTMENTS.map((d) => {
+    const el = document.createElement('div');
+    el.className = 'dept-label';
+    el.style.setProperty('--accent', d.accent);
+    el.innerHTML = `<span>${d.icon}</span>${d.name}<b></b>`;
+    labelLayer.appendChild(el);
+    const [rx0, rz0, rx1, rz1] = d.rect;
+    const count = el.querySelector('b') as HTMLElement;
+    // Zones against the back wall get a wall sign; others sit on the floor near their front edge.
+    // Khu sát tường sau thì treo biển trên tường; khu khác đặt biển trên sàn sát mép trước.
+    const onWall = d.enclosed || rz0 <= FLOOR.z0;
+    const pos = onWall ? new THREE.Vector3((rx0 + rx1) / 2, 3.6, rz0 + 0.3) : new THREE.Vector3((rx0 + rx1) / 2, 0.1, rz1 - 0.3);
+    return { d, el, count, pos };
+  });
 
   const rigs = new Map<string, CharacterRig>();
   for (const a of state.agents) {
@@ -387,15 +555,14 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
 
   // Envelope meshes for bus messages in flight. / Mesh phong thư cho tin nhắn đang bay.
   const envGeo = new THREE.BoxGeometry(0.55, 0.36, 0.06);
-  const envMat = mat('#ffffff');
   const sealMat = new THREE.MeshBasicMaterial({ color: '#ef6b73' });
   const envelopes = new Map<string, THREE.Group>();
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enablePan = false;
   controls.enableDamping = true;
-  controls.minZoom = 0.6;
-  controls.maxZoom = 2.4;
+  controls.minZoom = 0.7;
+  controls.maxZoom = 3;
   controls.minPolarAngle = 0.6;
   controls.maxPolarAngle = 1.15;
   controls.minAzimuthAngle = 0.15;
@@ -406,8 +573,9 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
     const w = container.clientWidth || 1;
     const h = container.clientHeight || 1;
     const aspect = w / h;
-    // Fit the room both ways: min half-height 10.5, min half-width 15. / Vừa khít phòng cả hai chiều: nửa cao tối thiểu 10.5, nửa rộng tối thiểu 15.
-    const size = Math.max(10.5, 15 / aspect);
+    // Fit the floor both ways; portrait screens crop the far corners to keep characters readable.
+    // Vừa khít mặt sàn; màn hình dọc cắt bớt góc xa để nhân vật vẫn đủ to.
+    const size = Math.max(12, (aspect < 1 ? 14.5 : 18.5) / aspect);
     camera.left = -size * aspect;
     camera.right = size * aspect;
     camera.top = size;
@@ -435,22 +603,21 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
   renderer.domElement.addEventListener('pointerdown', onDown);
   renderer.domElement.addEventListener('pointerup', onUp);
 
-  const deskWorld = (agentId: string) => rigs.get(agentId)?.anchor.clone().setY(3.6) ?? new THREE.Vector3();
+  const deskWorld = (agentId: string) => rigs.get(agentId)?.anchor.clone().setY(3.4) ?? hub.clone();
   const tmp = new THREE.Vector3();
   const clock = new THREE.Clock();
   let raf = 0;
 
+  const place = (el: HTMLElement, p: THREE.Vector3, w: number, h: number) => {
+    tmp.copy(p).project(camera);
+    el.style.transform = `translate(-50%, -100%) translate(${((tmp.x * 0.5 + 0.5) * w).toFixed(1)}px, ${((-tmp.y * 0.5 + 0.5) * h).toFixed(1)}px)`;
+  };
+
   const syncLabels = () => {
     const w = container.clientWidth;
     const h = container.clientHeight;
-    for (const a of state.agents) {
-      const rig = rigs.get(a.id);
-      if (!rig) continue;
-      tmp.copy(rig.anchor).project(camera);
-      const sx = (tmp.x * 0.5 + 0.5) * w;
-      const sy = (-tmp.y * 0.5 + 0.5) * h;
-      rig.label.style.transform = `translate(-50%, -100%) translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
-    }
+    for (const rig of rigs.values()) place(rig.label, rig.anchor, w, h);
+    for (const dl of deptLabels) place(dl.el, dl.pos, w, h);
   };
 
   const renderLabel = (a: Agent, rig: CharacterRig) => {
@@ -474,12 +641,11 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
       rig.ringMat.color.set(STATUS_COLOR[a.status]);
       rig.screenMat.emissive.set(SCREEN_COLOR[a.status]);
       const selected = state.selectedAgentId === a.id;
-      rig.ring.scale.setScalar(selected ? 1.12 + Math.sin(t * 4) * 0.05 : 1);
+      rig.ring.scale.setScalar(selected ? 1.15 + Math.sin(t * 4) * 0.05 : 1);
       rig.ringMat.opacity = selected ? 1 : 0.7;
 
       // Reset pose each frame then apply the status animation. / Reset tư thế mỗi frame rồi áp animation theo trạng thái.
-      rig.body.position.y = 1.05;
-      rig.body.position.x = 0;
+      rig.body.position.set(0, 1.05, -1.05);
       rig.body.rotation.set(0, 0, 0);
       rig.head.rotation.set(0, 0, 0);
       rig.armL.rotation.x = -1.1;
@@ -488,7 +654,7 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
         case 'working':
           rig.armL.rotation.x = -1.2 + Math.sin(p * 18) * 0.18;
           rig.armR.rotation.x = -1.2 + Math.sin(p * 18 + 1.7) * 0.18;
-          rig.head.rotation.x = 0.12 + Math.sin(p * 2) * 0.03;
+          rig.head.rotation.x = 0.1 + Math.sin(p * 2) * 0.03;
           rig.screenMat.emissiveIntensity = 0.8 + Math.sin(p * 9) * 0.15;
           break;
         case 'idle':
@@ -519,12 +685,22 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
       renderLabel(a, rig);
     }
 
-    // Blink server LEDs proportional to running agents. / LED server nháy theo số agent đang chạy.
+    // Department sign counters: working / total. / Bộ đếm trên biển phòng ban: đang làm / tổng.
+    for (const dl of deptLabels) {
+      if (!dl.d.hasTeam) continue;
+      const team = state.agents.filter((a) => a.dept === dl.d.id);
+      const txt = `${team.filter((a) => a.status === 'working').length}/${team.length}`;
+      if (dl.count.textContent !== txt) dl.count.textContent = txt;
+    }
+
+    // Server LEDs blink harder with more running agents. / LED server nháy mạnh hơn khi nhiều agent chạy.
     const busy = state.agents.filter((a) => a.status === 'working').length;
     leds.forEach((led, i) => {
-      const on = Math.sin(t * (3 + (i % 5)) + i * 1.7) > 0.4 - busy * 0.15;
-      (led.material as THREE.MeshBasicMaterial).color.set(on ? (i % 7 === 0 ? '#f5b544' : '#5cc98a') : '#2a2c3a');
+      const on = Math.sin(t * (3 + (i % 5)) + i * 1.7) > 0.5 - busy * 0.1;
+      (led.material as THREE.MeshBasicMaterial).color.set(on ? (i % 7 === 0 ? '#f5b544' : '#5cc98a') : '#22252f');
     });
+    // Meeting-room TV pulses while envelopes are in flight. / TV phòng họp nháy khi có phong thư đang bay.
+    tv.color.set(state.flights.length && Math.sin(t * 6) > 0 ? '#ffd27a' : '#7cc4ff');
 
     // Sticky notes on the task board. / Giấy note trên bảng task.
     const recent = state.tasks.slice(-notes.length);
@@ -534,7 +710,7 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
       if (task) (n.material as THREE.MeshStandardMaterial).color.set(NOTE_COLOR[task.status] ?? '#ffe680');
     });
 
-    // Envelopes fly desk → hub → desk along an arc. / Phong thư bay bàn → trạm → bàn theo đường cong.
+    // Envelopes fly desk → meeting room (bus) → desk. / Phong thư bay bàn → phòng họp (bus) → bàn.
     const now = Date.now();
     const live = new Set<string>();
     for (const f of state.flights) {
@@ -542,7 +718,7 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
       let env = envelopes.get(f.id);
       if (!env) {
         env = new THREE.Group();
-        const paper = new THREE.Mesh(envGeo, envMat);
+        const paper = new THREE.Mesh(envGeo, mat('#ffffff'));
         const seal = new THREE.Mesh(new THREE.CircleGeometry(0.07, 10), sealMat);
         seal.position.z = 0.035;
         env.add(paper, seal);
@@ -552,12 +728,12 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
       const k = Math.min(1, (now - f.startedAt) / 1800);
       const a = deskWorld(f.from);
       const b = deskWorld(f.to);
-      const mid = hub.position.clone().setY(5.5).lerp(a.clone().lerp(b, 0.5), 0.5);
-      // Quadratic Bézier. / Đường Bézier bậc hai.
+      const mid = hub.clone().setY(6.5).lerp(a.clone().lerp(b, 0.5), 0.35);
+      // Quadratic Bézier through the bus hub. / Bézier bậc hai đi qua trạm bus.
       const u = 1 - k;
       env.position.set(
         u * u * a.x + 2 * u * k * mid.x + k * k * b.x,
-        u * u * a.y + 2 * u * k * mid.y + k * k * b.y + Math.sin(k * Math.PI) * 1.2,
+        u * u * a.y + 2 * u * k * mid.y + k * k * b.y,
         u * u * a.z + 2 * u * k * mid.z + k * k * b.z,
       );
       env.rotation.set(Math.sin(t * 6) * 0.3, t * 3, 0);

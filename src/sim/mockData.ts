@@ -7,33 +7,54 @@ export const AGENT_SEED: Omit<Agent, 'status' | 'context' | 'currentTaskId' | 'l
   {
     id: 'bo', name: 'Bơ', role: 'backend', roleLabel: 'Backend · Go', color: '#7cc08a', hair: '#4a3427',
     model: 'opus', worktree: '~/office/wt/bo', tools: ['Read', 'Edit', 'Bash(go *)', 'Grep'],
-    sessionId: 'a1f3-bo', desk: 0,
+    sessionId: 'a1f3-bo', dept: 'backend', seat: [-5.2, -6.4],
   },
   {
     id: 'mit', name: 'Mít', role: 'frontend', roleLabel: 'Frontend · React', color: '#f6c453', hair: '#2f2a3a',
     model: 'sonnet', worktree: '~/office/wt/mit', tools: ['Read', 'Edit', 'Bash(npm *)', 'WebFetch'],
-    sessionId: 'b7c2-mit', desk: 1,
+    sessionId: 'b7c2-mit', dept: 'product', seat: [-5.0, 1.4],
   },
   {
     id: 'na', name: 'Na', role: 'mobile', roleLabel: 'Mobile · Flutter', color: '#8fb8f2', hair: '#6b3f2a',
     model: 'sonnet', worktree: '~/office/wt/na', tools: ['Read', 'Edit', 'Bash(flutter *)'],
-    sessionId: 'c9d4-na', desk: 2,
+    sessionId: 'c9d4-na', dept: 'product', seat: [1.8, 1.4],
   },
   {
     id: 'sau', name: 'Sấu', role: 'devops', roleLabel: 'DevOps · K8s', color: '#b59ae8', hair: '#1f1c24',
     model: 'sonnet', worktree: '~/office/wt/sau', tools: ['Read', 'Bash(kubectl get *)', 'Bash(terraform plan)'],
-    sessionId: 'd2e8-sau', desk: 3,
+    sessionId: 'd2e8-sau', dept: 'platform', seat: [8.4, 1.4],
   },
   {
     id: 'chanh', name: 'Chanh', role: 'qa', roleLabel: 'QA · Test', color: '#f29bb0', hair: '#a8643a',
     model: 'haiku', worktree: '~/office/wt/chanh', tools: ['Read', 'Bash(go test *)', 'Bash(npm test)'],
-    sessionId: 'e5f1-chanh', desk: 4,
+    sessionId: 'e5f1-chanh', dept: 'qa', seat: [-13.0, 1.4],
   },
   {
     id: 'cam', name: 'Cam', role: 'lead', roleLabel: 'Tech Lead · Review', color: '#f39a5b', hair: '#3b2b22',
     model: 'opus', worktree: '~/office/wt/cam', tools: ['Read', 'Grep', 'Bash(git diff *)'],
-    sessionId: 'f0a6-cam', desk: 5,
+    sessionId: 'f0a6-cam', dept: 'lead', seat: [6.0, -6.8],
   },
+  {
+    id: 'oi', name: 'Ổi', role: 'backend', roleLabel: 'Backend · Kafka', color: '#c7e07a', hair: '#5a3b2b',
+    model: 'sonnet', worktree: '~/office/wt/oi', tools: ['Read', 'Edit', 'Bash(go *)'],
+    sessionId: 'a7b9-oi', dept: 'backend', seat: [-1.8, -6.4],
+  },
+  {
+    id: 'dua', name: 'Dừa', role: 'frontend', roleLabel: 'Frontend · Design system', color: '#7fd6c8', hair: '#2a2430',
+    model: 'sonnet', worktree: '~/office/wt/dua', tools: ['Read', 'Edit', 'Bash(npm *)'],
+    sessionId: 'b3d1-dua', dept: 'product', seat: [-1.6, 1.4],
+  },
+  {
+    id: 'man', name: 'Mận', role: 'qa', roleLabel: 'QA · Automation', color: '#c68ad8', hair: '#3a2a22',
+    model: 'haiku', worktree: '~/office/wt/man', tools: ['Read', 'Bash(go test *)', 'Bash(npx playwright *)'],
+    sessionId: 'e8a2-man', dept: 'qa', seat: [-9.8, 1.4],
+  },
+];
+
+/** Free desks waiting for a new agent. / Bàn trống chờ agent mới. */
+export const EMPTY_SEATS: [number, number][] = [
+  [1.6, -6.4],
+  [11.8, 1.4],
 ];
 
 /** Who an agent usually pings for each role. / Mỗi role thường nhắn cho ai. */
@@ -89,11 +110,13 @@ export function createInitialState(now: number): OfficeState {
     { id: 't7', title: 'Thêm readiness probe cho orchestrator', assignee: 'sau', status: 'queued', parentId: null, createdAt: ago(120), updatedAt: ago(120) },
     { id: 't8', title: 'Chốt ADR: Go + claude -p', assignee: 'cam', status: 'review', parentId: null, createdAt: ago(2400), updatedAt: ago(900) },
     { id: 't9', title: 'Test anti-loop của office bus', assignee: 'chanh', status: 'queued', parentId: null, createdAt: ago(90), updatedAt: ago(90) },
+    { id: 't10', title: 'Viết outbox pattern cho Kafka', assignee: 'oi', status: 'running', parentId: null, createdAt: ago(300), updatedAt: ago(25) },
+    { id: 't11', title: 'Dark mode cho task board', assignee: 'dua', status: 'running', parentId: 't2', createdAt: ago(260), updatedAt: ago(12) },
   ];
 
-  const status: Record<string, Agent['status']> = { bo: 'working', mit: 'working', na: 'waiting', sau: 'idle', chanh: 'error', cam: 'working' };
-  const context: Record<string, number> = { bo: 0.46, mit: 0.31, na: 0.58, sau: 0.12, chanh: 0.83, cam: 0.27 };
-  const current: Record<string, string | null> = { bo: 't1', mit: 't2', na: 't3', sau: null, chanh: null, cam: 't5' };
+  const status: Record<string, Agent['status']> = { bo: 'working', mit: 'working', na: 'waiting', sau: 'idle', chanh: 'error', cam: 'working', oi: 'working', dua: 'paused', man: 'idle' };
+  const context: Record<string, number> = { bo: 0.46, mit: 0.31, na: 0.58, sau: 0.12, chanh: 0.83, cam: 0.27, oi: 0.22, dua: 0.4, man: 0.08 };
+  const current: Record<string, string | null> = { bo: 't1', mit: 't2', na: 't3', sau: null, chanh: null, cam: 't5', oi: 't10', dua: 't11', man: null };
 
   const agents: Agent[] = AGENT_SEED.map((a) => ({
     ...a,
@@ -123,6 +146,10 @@ export function createInitialState(now: number): OfficeState {
     ev('cam', 'user', 'Review PR orchestrator', 420),
     ev('cam', 'tool_call', 'Bash git diff main...HEAD --stat', 300),
     ev('cam', 'tool_result', '14 files changed, 812 insertions(+), 96 deletions(-)', 299),
+    ev('oi', 'user', 'Viết outbox pattern cho Kafka', 300),
+    ev('oi', 'tool_call', 'Read internal/infra/kafka/producer.go', 280),
+    ev('dua', 'user', 'Dark mode cho task board', 260),
+    ev('dua', 'system', 'paused bởi Đức', 100),
     ev('sau', 'assistant', 'Terraform cho Tailscale node xong, plan sạch. Em rảnh nhé.', 300),
   ];
 
@@ -159,7 +186,7 @@ export function createInitialState(now: number): OfficeState {
     ],
     flights: [],
     quota: { fiveHour: 0.42, weekly: 0.27, fiveHourResetAt: now + 2.6 * 3600_000 },
-    concurrencyLimit: 4,
+    concurrencyLimit: 6,
     turnLimit: 6,
     selectedAgentId: null,
   };

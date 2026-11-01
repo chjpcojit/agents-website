@@ -170,6 +170,7 @@ button.ghost { border: 0; background: var(--bg-2); border-radius: 10px; width: 3
 .avatar-face i { width: 12%; height: 18%; background: #2b2333; border-radius: 50%; display: block; }
 
 .roster { display: flex; flex-direction: column; gap: 8px; }
+.dept-group { display: flex; flex-direction: column; gap: 8px; }
 .roster-item {
   display: flex; gap: 10px; align-items: flex-start; text-align: left; width: 100%;
   border: 1px solid var(--line); background: var(--surface-2); border-radius: var(--radius); padding: 10px;
@@ -258,4 +259,27 @@ button.ghost { border: 0; background: var(--bg-2); border-radius: 10px; width: 3
   .chip { flex: 1; min-width: 0; }
   .legend { right: 14px; justify-content: center; font-size: 11px; }
   .panel { padding: 12px 16px; }
+}
+
+/* Department signs floating over each zone. / Biển tên phòng ban nổi trên từng khu. */
+.dept-label {
+  position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 6px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86); border-left: 4px solid var(--accent); color: #3a3346;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.3px; text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(40, 40, 60, 0.12); backdrop-filter: blur(4px); will-change: transform;
+}
+.dept-label b { font-weight: 800; color: #6b6478; background: #f0eef4; border-radius: 6px; padding: 0 5px; }
+.dept-label b:empty { display: none; }
+
+.dept-group { margin-bottom: 4px; }
+.dept-group h3 { display: flex; align-items: center; gap: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 10px 2px 6px; }
+.dept-group h3 i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+/* Small screens: lighter labels so the scene stays readable. / Màn hình nhỏ: label gọn để scene vẫn dễ nhìn. */
+@media (max-width: 600px) {
+  .dept-label { display: none; }
+  .agent-label { font-size: 10px; padding: 2px 7px 2px 3px; gap: 3px; }
+  .agent-label .ctx { display: none; }
+  .agent-label .bubble { width: 16px; height: 16px; font-size: 9px; }
 }

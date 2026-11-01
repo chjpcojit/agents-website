@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { STATUS_COLOR } from '../scene/office';
+import { DEPARTMENTS } from '../sim/departments';
 import { store } from '../sim/store';
 import type { Agent, AgentStatus, StreamKind } from '../sim/types';
 import { ago, useOffice } from '../useOffice';
@@ -45,31 +46,41 @@ function ContextBar({ value }: { value: number }) {
   );
 }
 
-/** Roster when nothing is selected. / Danh sách agent khi chưa chọn ai. */
+/** Roster grouped by department when nothing is selected. / Danh sách agent theo phòng ban khi chưa chọn ai. */
 function Roster() {
   const s = useOffice();
   return (
     <div className="roster">
-      <p className="muted">6 agent, mỗi agent là một session Claude Code chạy trong git worktree riêng.</p>
-      {s.agents.map((a) => {
-        const task = s.tasks.find((t) => t.id === a.currentTaskId);
-        return (
-          <button key={a.id} className="roster-item" onClick={() => store.select(a.id)}>
-            <Avatar agent={a} />
-            <div className="grow">
-              <div className="row between">
-                <b>{a.name}</b>
-                <span className="pill" style={{ background: STATUS_COLOR[a.status] }}>
-                  {STATUS_LABEL[a.status]}
-                </span>
-              </div>
-              <small className="muted">{a.roleLabel}</small>
-              <div className="clip">{task ? task.title : a.lastError ?? '—'}</div>
-              <ContextBar value={a.context} />
-            </div>
-          </button>
-        );
-      })}
+      <p className="muted">{s.agents.length} agent ở {DEPARTMENTS.filter((d) => d.hasTeam).length} phòng ban, mỗi agent là một session Claude Code chạy trong git worktree riêng.</p>
+      {DEPARTMENTS.filter((d) => d.hasTeam).map((d) => (
+        <section key={d.id} className="dept-group">
+          <h3>
+            <i style={{ background: d.accent }} />
+            {d.icon} {d.name}
+          </h3>
+          {s.agents
+            .filter((a) => a.dept === d.id)
+            .map((a) => {
+              const task = s.tasks.find((t) => t.id === a.currentTaskId);
+              return (
+                <button key={a.id} className="roster-item" onClick={() => store.select(a.id)}>
+                  <Avatar agent={a} />
+                  <div className="grow">
+                    <div className="row between">
+                      <b>{a.name}</b>
+                      <span className="pill" style={{ background: STATUS_COLOR[a.status] }}>
+                        {STATUS_LABEL[a.status]}
+                      </span>
+                    </div>
+                    <small className="muted">{a.roleLabel}</small>
+                    <div className="clip">{task ? task.title : a.lastError ?? '—'}</div>
+                    <ContextBar value={a.context} />
+                  </div>
+                </button>
+              );
+            })}
+        </section>
+      ))}
     </div>
   );
 }
@@ -115,6 +126,8 @@ function Detail({ agent }: { agent: Agent }) {
       </div>
 
       <dl className="facts">
+        <dt>phòng ban</dt>
+        <dd>{DEPARTMENTS.find((d) => d.id === agent.dept)?.name}</dd>
         <dt>worktree</dt>
         <dd>
           <code>{agent.worktree}</code>

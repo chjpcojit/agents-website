@@ -44,7 +44,7 @@ export class OfficeStore {
     // Khởi động script cho các agent đang ở trạng thái "working".
     for (const a of this.state.agents) {
       const task = this.state.tasks.find((t) => t.id === a.currentTaskId);
-      if (task && (a.status === 'working' || a.status === 'waiting')) {
+      if (task && (a.status === 'working' || a.status === 'waiting' || a.status === 'paused')) {
         this.runners.set(a.id, { steps: this.buildScript(a, task).slice(3), index: 0, nextAt: now + 1500 + Math.random() * 2500 });
       }
     }
