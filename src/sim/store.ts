@@ -277,7 +277,7 @@ export class OfficeStore {
 
   /** Keep the office lively: idle agents sometimes get new work. / Giữ văn phòng sôi động: agent rảnh thỉnh thoảng nhận việc mới. */
   private maybeInventWork(now: number): void {
-    if (Math.random() > 0.035) return;
+    if (Math.random() > 0.015) return;
     const idle = this.state.agents.filter((a) => a.status === 'idle');
     if (idle.length === 0) return;
     const a = pick(idle);

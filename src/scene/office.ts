@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { DEPARTMENTS, DEPT_BY_ID, FLOOR, type Department } from '../sim/departments';
 import { EMPTY_SEATS } from '../sim/mockData';
 import type { Agent, AgentStatus, OfficeState, TaskStatus } from '../sim/types';
+import { ACTIVITY_PROP, angleDelta, chairOf, corridorRoute, homeApproach, visitApproach, CORRIDOR_BOTTOM, type Spot, type V2 } from './walkers';
 
 // Modern open-plan office (glass rooms, departments) built with plain three.js.
 // Each agent is a chibi character sitting at a desk in its department.
@@ -149,6 +150,8 @@ interface CharacterRig {
   head: THREE.Group;
   armL: THREE.Mesh;
   armR: THREE.Mesh;
+  legs: THREE.Group[];
+  props: Record<'mug' | 'phone' | 'paddle', THREE.Object3D>;
   screenMat: THREE.MeshStandardMaterial;
   ring: THREE.Mesh;
   ringMat: THREE.MeshBasicMaterial;
@@ -200,6 +203,33 @@ function buildWorkstation(agent: Agent): Omit<CharacterRig, 'label'> {
   armR.position.x = 0.45;
   body.add(armL, armR);
 
+  // Legs pivot at the hip: forward when seated, swinging when walking. / Chân xoay quanh hông: duỗi trước khi ngồi, đung đưa khi đi.
+  const legGeo = new THREE.CapsuleGeometry(0.13, 0.32, 3, 6);
+  const legs = [-0.2, 0.2].map((lx) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(lx, 0.15, 0);
+    const leg = new THREE.Mesh(legGeo, mat('#3d4252'));
+    leg.position.y = -0.3;
+    leg.castShadow = true;
+    pivot.add(leg);
+    body.add(pivot);
+    return pivot;
+  });
+
+  // Hand-held props, shown per activity. / Đồ cầm tay, hiện theo hoạt động.
+  const mugProp = cyl(0.1, 0.09, 0.2, '#ffffff', 10);
+  mugProp.position.set(0, -0.4, 0.08);
+  const phoneProp = box(0.2, 0.04, 0.3, '#22252f', 0, -0.42, 0.12);
+  const paddleProp = new THREE.Group();
+  const blade = cyl(0.2, 0.2, 0.04, '#ef6b73', 14);
+  blade.rotation.z = Math.PI / 2;
+  blade.position.y = -0.62;
+  paddleProp.add(blade, box(0.05, 0.2, 0.05, C.woodDark, 0, -0.42, 0));
+  for (const prop of [mugProp, phoneProp, paddleProp]) {
+    prop.visible = false;
+    armR.add(prop);
+  }
+
   const head = new THREE.Group();
   head.position.y = 1.45;
   const skin = new THREE.Mesh(new THREE.SphereGeometry(0.55, 14, 12), mat('#ffe0c7'));
@@ -236,7 +266,7 @@ function buildWorkstation(agent: Agent): Omit<CharacterRig, 'label'> {
   root.traverse((o) => (o.userData.agentId = agent.id));
 
   return {
-    agentId: agent.id, root, body, head, armL, armR, screenMat, ring, ringMat,
+    agentId: agent.id, root, body, head, armL, armR, legs, props: { mug: mugProp, phone: phoneProp, paddle: paddleProp }, screenMat, ring, ringMat,
     anchor: new THREE.Vector3(x, 3.75, z - 1.05), phase: Math.random() * Math.PI * 2,
   };
 }
@@ -277,7 +307,8 @@ function carpet(scene: THREE.Scene, d: Department, inset: number): void {
 }
 
 /** Static floor plan: shell, departments, furniture. / Mặt bằng tĩnh: vỏ toà nhà, phòng ban, nội thất. */
-function buildOffice(scene: THREE.Scene): { leds: THREE.Mesh[]; notes: THREE.Mesh[]; hub: THREE.Vector3; tv: THREE.MeshBasicMaterial } {
+function buildOffice(scene: THREE.Scene): { leds: THREE.Mesh[]; notes: THREE.Mesh[]; hub: THREE.Vector3; tv: THREE.MeshBasicMaterial; spots: Spot[] } {
+  const spots: Spot[] = [];
   const { x0, x1, z0, z1 } = FLOOR;
   const W = x1 - x0;
   const D = z1 - z0;
@@ -413,6 +444,9 @@ function buildOffice(scene: THREE.Scene): { leds: THREE.Mesh[]; notes: THREE.Mes
   const bowl = cyl(0.35, 0.25, 0.18, '#f2f2f0');
   bowl.position.set(x0 + 0.5, 1.58, pan[1] + 4.2);
   scene.add(bowl);
+  for (const [i, cz] of [7.4, 9.0].entries()) {
+    spots.push({ id: `coffee${i}`, path: [{ x: x0 + 1.5, z: CORRIDOR_BOTTOM }, { x: x0 + 1.5, z: cz }], face: -Math.PI / 2, seatY: null, activity: 'sip', emoji: '☕' });
+  }
   const htx = (pan[0] + pan[2]) / 2 + 1.2;
   const htz = (pan[1] + pan[3]) / 2;
   const top = cyl(1.0, 1.0, 0.1, C.wood, 20);
@@ -425,6 +459,8 @@ function buildOffice(scene: THREE.Scene): { leds: THREE.Mesh[]; notes: THREE.Mes
     const a = (i / 4) * Math.PI * 2 + 0.4;
     const sx = htx + Math.cos(a) * 1.35;
     const sz = htz + Math.sin(a) * 1.35;
+    // Front stools (reachable straight from the corridor) become snack spots. / Ghế phía trước (đi thẳng từ hành lang) thành chỗ ăn vặt.
+    if (sz < htz) spots.push({ id: `stool${i}`, path: [{ x: sx, z: CORRIDOR_BOTTOM }, { x: sx, z: sz }], face: Math.atan2(htx - sx, htz - sz), seatY: 1.17, activity: 'snack', emoji: '🍪' });
     const stool = cyl(0.3, 0.3, 0.1, '#f4b26b');
     stool.position.set(sx, 1.1, sz);
     scene.add(stool);
@@ -435,23 +471,37 @@ function buildOffice(scene: THREE.Scene): { leds: THREE.Mesh[]; notes: THREE.Mes
 
   // --- Lounge: sofa, coffee table, beanbags, ping-pong table. / Lounge: sofa, bàn trà, ghế lười, bàn bóng bàn. ---
   const lou = DEPT_BY_ID.lounge.rect;
+  // Sofa faces the camera (+z) with a coffee table and beanbags in front. / Sofa quay về camera (+z), bàn trà và ghế lười phía trước.
   const sx = lou[0] + 4;
-  const sz = lou[3] - 1.4;
+  const sz = lou[1] + 1.6;
   scene.add(box(4.0, 0.6, 1.2, '#7fb7a6', sx, 0.4, sz));
-  scene.add(box(4.0, 1.0, 0.3, '#6aa392', sx, 0.95, sz + 0.5));
+  scene.add(box(4.0, 1.0, 0.3, '#6aa392', sx, 0.95, sz - 0.5));
   scene.add(box(0.3, 0.8, 1.2, '#6aa392', sx - 2.0, 0.6, sz));
   scene.add(box(0.3, 0.8, 1.2, '#6aa392', sx + 2.0, 0.6, sz));
-  const rug = cyl(2.4, 2.4, 0.03, '#f3ead9', 28);
-  rug.position.set(sx, 0.05, sz - 2.2);
+  const rug = cyl(2.6, 2.6, 0.03, '#f3ead9', 28);
+  rug.position.set(sx, 0.05, sz + 2.2);
   scene.add(rug);
-  scene.add(box(1.8, 0.45, 1.0, C.wood, sx, 0.35, sz - 2.2));
-  const beans: [number, number, string][] = [[sx - 2.4, sz - 3.2, '#f6c453'], [sx + 2.3, sz - 3.0, '#ef8f9f']];
-  for (const [bx, bz2, col] of beans) {
+  scene.add(box(1.8, 0.45, 1.0, C.wood, sx, 0.35, sz + 2.0));
+  for (const [i, dx] of [-1.2, 0, 1.2].entries()) {
+    spots.push({
+      id: `sofa${i}`,
+      path: [{ x: sx + 2.6, z: CORRIDOR_BOTTOM }, { x: sx + 2.6, z: sz + 0.9 }, { x: sx + dx, z: sz + 0.9 }, { x: sx + dx, z: sz }],
+      face: 0, seatY: 0.72, activity: i === 1 ? 'chill' : 'game', emoji: i === 1 ? '😌' : '🎮',
+    });
+  }
+  const beans: [number, string][] = [[-1.7, '#f6c453'], [1.7, '#ef8f9f']];
+  for (const [dx, col] of beans) {
     const bean = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), mat(col));
-    bean.scale.set(1, 0.65, 1);
-    bean.position.set(bx, 0.45, bz2);
+    bean.scale.set(1, 0.6, 1);
+    bean.position.set(sx + dx, 0.4, sz + 3.8);
     bean.castShadow = true;
     scene.add(bean);
+    const side = dx < 0 ? sx - 2.7 : sx + 2.7;
+    spots.push({
+      id: `bean${dx}`,
+      path: [{ x: side, z: CORRIDOR_BOTTOM }, { x: side, z: sz + 3.8 }, { x: sx + dx, z: sz + 3.8 }],
+      face: Math.PI, seatY: 0.68, activity: dx < 0 ? 'game' : 'chill', emoji: dx < 0 ? '🎮' : '📖',
+    });
   }
   const ppx = lou[2] - 4.5;
   const ppz = (lou[1] + lou[3]) / 2;
@@ -459,14 +509,16 @@ function buildOffice(scene: THREE.Scene): { leds: THREE.Mesh[]; notes: THREE.Mes
   scene.add(box(0.04, 0.12, 2.3, '#ffffff', ppx, 1.27, ppz));
   scene.add(box(0.05, 0.3, 2.5, C.metal, ppx, 1.38, ppz));
   for (const lx of [-1.8, 1.8]) for (const lz of [-0.9, 0.9]) scene.add(box(0.1, 1.15, 0.1, C.metal, ppx + lx, 0.58, ppz + lz));
+  for (const side of [-1, 1]) {
+    const px = ppx + side * 2.8;
+    spots.push({ id: `pong${side}`, path: [{ x: px, z: CORRIDOR_BOTTOM }, { x: px, z: ppz }], face: side < 0 ? Math.PI / 2 : -Math.PI / 2, seatY: null, activity: 'pingpong', emoji: '🏓' });
+  }
 
   // Plants along the windows and aisles. / Cây xanh dọc cửa kính và lối đi.
-  scene.add(
-    plant(x0 + 0.8, 4.5, 1.2), plant(-7.6, -3.5, 1.0), plant(4.6, -3.5, 0.9), plant(14.2, -3.4, 1.1),
-    plant(14.2, 4.6, 1.3), plant(-4.6, 10.2, 1.2), plant(lou[0] + 0.8, lou[1] + 0.8, 1.0),
-  );
+  // Kept off the corridors so walkers don't clip them. / Đặt ngoài hành lang để nhân vật không đi xuyên.
+  scene.add(plant(x0 + 0.8, 3.3, 1.1), plant(14.3, -2.6, 1.1), plant(14.3, 10.3, 1.3), plant(-4.4, 10.3, 1.2), plant(2.6, -10.3, 1.0));
 
-  return { leds, notes, hub: new THREE.Vector3(mx, 2.2, mz), tv };
+  return { leds, notes, hub: new THREE.Vector3(mx, 2.2, mz), tv, spots };
 }
 
 const NOTE_COLOR: Partial<Record<TaskStatus, string>> = {
@@ -513,7 +565,7 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
   sun.shadow.bias = -0.0008;
   scene.add(sun);
 
-  const { leds, notes, hub, tv } = buildOffice(scene);
+  const { leds, notes, hub, tv, spots } = buildOffice(scene);
 
   // Empty desks = room to "hire" more agents (screens off). / Bàn trống = chỗ cho agent mới (màn hình tắt).
   for (const [ex, ez] of EMPTY_SEATS) {
@@ -606,7 +658,62 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
   const deskWorld = (agentId: string) => rigs.get(agentId)?.anchor.clone().setY(3.4) ?? hub.clone();
   const tmp = new THREE.Vector3();
   const clock = new THREE.Clock();
+  let t = 0;
   let raf = 0;
+
+  // ---- Walkers: per-agent movement state (visual only, driven by agent status + bus flights). ----
+  // ---- Walker: trạng thái di chuyển của từng agent (chỉ là hình ảnh, dựa trên status + tin nhắn bus). ----
+  type Place = { kind: 'home' } | { kind: 'spot'; spot: Spot } | { kind: 'visit'; target: string };
+  interface Walker {
+    pos: V2;
+    facing: number;
+    place: Place;
+    dest: Place | null;
+    path: V2[];
+    speed: number;
+    until: number;
+    nextWander: number;
+    visitQueue: string[];
+  }
+  const HOME: Place = { kind: 'home' };
+  const agentById = () => new Map(state.agents.map((a) => [a.id, a]));
+  const walkers = new Map<string, Walker>();
+  for (const a of state.agents) {
+    walkers.set(a.id, { pos: chairOf(a), facing: 0, place: HOME, dest: null, path: [], speed: 3, until: 0, nextWander: 1 + Math.random() * 3, visitQueue: [] });
+  }
+
+  /** Path from the corridor into a place. / Đường từ hành lang vào một chỗ. */
+  const approach = (agent: Agent, place: Place, byId: Map<string, Agent>): V2[] => {
+    if (place.kind === 'home') return homeApproach(agent);
+    if (place.kind === 'spot') return place.spot.path;
+    const target = byId.get(place.target);
+    return target ? visitApproach(target) : homeApproach(agent);
+  };
+
+  /** Plan a walk: leave the current place to its corridor, route through aisles, enter the destination. / Lập đường: ra hành lang, đi qua lối dọc, vào đích. */
+  const go = (agent: Agent, w: Walker, dest: Place, byId: Map<string, Agent>, speed = 3) => {
+    const out = [...approach(agent, w.place, byId)].reverse().slice(1);
+    const inn = approach(agent, dest, byId);
+    const from = out[out.length - 1] ?? w.pos;
+    const first = inn[0] ?? from;
+    w.path = [...out, ...corridorRoute(from, first), ...inn.slice(1)];
+    w.dest = dest;
+    w.speed = speed;
+  };
+
+  const takenSpots = () => {
+    const ids = new Set<string>();
+    for (const w of walkers.values()) {
+      if (w.place.kind === 'spot') ids.add(w.place.spot.id);
+      if (w.dest?.kind === 'spot') ids.add(w.dest.spot.id);
+    }
+    return ids;
+  };
+  const freeSpot = (exclude?: string): Spot | undefined => {
+    const taken = takenSpots();
+    const free = spots.filter((sp) => !taken.has(sp.id) && sp.id !== exclude);
+    return free[Math.floor(Math.random() * free.length)];
+  };
 
   const place = (el: HTMLElement, p: THREE.Vector3, w: number, h: number) => {
     tmp.copy(p).project(camera);
@@ -616,73 +723,241 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
   const syncLabels = () => {
     const w = container.clientWidth;
     const h = container.clientHeight;
-    for (const rig of rigs.values()) place(rig.label, rig.anchor, w, h);
+    for (const rig of rigs.values()) {
+      // Label follows the character, wherever it walks. / Label đi theo nhân vật dù đi đâu.
+      rig.anchor.set(rig.root.position.x + rig.body.position.x, rig.body.position.y + 2.7, rig.root.position.z + rig.body.position.z);
+      place(rig.label, rig.anchor, w, h);
+    }
     for (const dl of deptLabels) place(dl.el, dl.pos, w, h);
   };
 
-  const renderLabel = (a: Agent, rig: CharacterRig) => {
+  const renderLabel = (a: Agent, rig: CharacterRig, emoji: string) => {
     const selected = state.selectedAgentId === a.id;
-    const key = `${a.name}|${a.status}|${selected}|${Math.round(a.context * 100)}`;
+    const key = `${a.name}|${a.status}|${selected}|${Math.round(a.context * 100)}|${emoji}`;
     if (rig.label.dataset.key === key) return;
     rig.label.dataset.key = key;
     rig.label.className = `agent-label status-${a.status}${selected ? ' selected' : ''}`;
-    rig.label.innerHTML = `<span class="bubble">${STATUS_EMOJI[a.status]}</span><span class="name">${a.name}</span><span class="ctx"><i style="width:${Math.round(a.context * 100)}%"></i></span>`;
+    rig.label.innerHTML = `<span class="bubble">${emoji}</span><span class="name">${a.name}</span><span class="ctx"><i style="width:${Math.round(a.context * 100)}%"></i></span>`;
+  };
+
+  // Turn new agent→agent bus messages into desk visits when the sender is free to walk.
+  // Chuyển tin nhắn agent→agent mới thành chuyến đi tới bàn nếu người gửi đang ở bàn.
+  const seenFlights = new Set<string>();
+  const walkedFlights = new Set<string>();
+  const absorbFlights = () => {
+    const live = new Set(state.flights.map((f) => f.id));
+    for (const id of seenFlights) if (!live.has(id)) seenFlights.delete(id);
+    for (const id of walkedFlights) if (!live.has(id)) walkedFlights.delete(id);
+    for (const f of state.flights) {
+      if (seenFlights.has(f.id)) continue;
+      seenFlights.add(f.id);
+      const w = walkers.get(f.from);
+      if (w && f.to !== f.from && walkers.has(f.to) && w.place.kind === 'home' && w.path.length === 0 && w.visitQueue.length === 0) {
+        w.visitQueue.push(f.to);
+        walkedFlights.add(f.id);
+      }
+    }
   };
 
   const animate = () => {
     raf = requestAnimationFrame(animate);
-    const t = clock.getElapsedTime();
+    const dt = Math.min(0.05, clock.getDelta());
+    t += dt;
     controls.update();
+    absorbFlights();
+    const byId = agentById();
+
+    // Who is currently chatting at whose desk. / Ai đang đứng nói chuyện ở bàn ai.
+    const visitorOf = new Map<string, string>();
+    for (const [id, w] of walkers) if (w.place.kind === 'visit' && w.path.length === 0) visitorOf.set(w.place.target, id);
 
     for (const a of state.agents) {
       const rig = rigs.get(a.id);
-      if (!rig) continue;
+      const w = walkers.get(a.id);
+      if (!rig || !w) continue;
       const p = t + rig.phase;
+      const idle = a.status === 'idle';
+
+      // 1) Decide what to do next when not walking. / 1) Quyết định việc tiếp theo khi đang đứng yên.
+      if (w.path.length === 0) {
+        if (w.place.kind === 'home') {
+          const target = w.visitQueue.shift();
+          if (target) go(a, w, { kind: 'visit', target }, byId);
+          else if (idle && t > w.nextWander) {
+            const spot = freeSpot();
+            if (spot) go(a, w, { kind: 'spot', spot }, byId);
+            else w.nextWander = t + 4;
+          }
+        } else if (w.place.kind === 'spot') {
+          if (!idle) go(a, w, HOME, byId, 4.5); // got work → hurry back / có việc → về bàn nhanh
+          else if (t > w.until) {
+            const next = Math.random() < 0.4 ? freeSpot(w.place.spot.id) : undefined;
+            go(a, w, next ? { kind: 'spot', spot: next } : HOME, byId);
+          }
+        } else if (t > w.until) {
+          go(a, w, HOME, byId);
+        }
+      }
+
+      // 2) Move along the path. / 2) Di chuyển theo đường.
+      const walking = w.path.length > 0;
+      if (walking) {
+        const target = w.path[0] as V2;
+        const dx = target.x - w.pos.x;
+        const dz = target.z - w.pos.z;
+        const dist = Math.hypot(dx, dz);
+        const step = w.speed * dt;
+        if (dist > 1e-4) w.facing += angleDelta(w.facing, Math.atan2(dx, dz)) * Math.min(1, dt * 12);
+        if (dist <= step) {
+          w.pos = { ...target };
+          w.path.shift();
+          if (w.path.length === 0 && w.dest) {
+            // Arrived. / Đã tới nơi.
+            w.place = w.dest;
+            w.dest = null;
+            if (w.place.kind === 'spot') w.until = t + 8 + Math.random() * 10;
+            if (w.place.kind === 'visit') w.until = t + 3.2;
+            if (w.place.kind === 'home') w.nextWander = t + 6 + Math.random() * 8;
+          }
+        } else {
+          w.pos = { x: w.pos.x + (dx / dist) * step, z: w.pos.z + (dz / dist) * step };
+        }
+      }
+
+      // 3) Pose. / 3) Tư thế.
       rig.ringMat.color.set(STATUS_COLOR[a.status]);
       rig.screenMat.emissive.set(SCREEN_COLOR[a.status]);
       const selected = state.selectedAgentId === a.id;
       rig.ring.scale.setScalar(selected ? 1.15 + Math.sin(t * 4) * 0.05 : 1);
       rig.ringMat.opacity = selected ? 1 : 0.7;
 
-      // Reset pose each frame then apply the status animation. / Reset tư thế mỗi frame rồi áp animation theo trạng thái.
-      rig.body.position.set(0, 1.05, -1.05);
       rig.body.rotation.set(0, 0, 0);
       rig.head.rotation.set(0, 0, 0);
-      rig.armL.rotation.x = -1.1;
-      rig.armR.rotation.x = -1.1;
-      switch (a.status) {
-        case 'working':
-          rig.armL.rotation.x = -1.2 + Math.sin(p * 18) * 0.18;
-          rig.armR.rotation.x = -1.2 + Math.sin(p * 18 + 1.7) * 0.18;
-          rig.head.rotation.x = 0.1 + Math.sin(p * 2) * 0.03;
-          rig.screenMat.emissiveIntensity = 0.8 + Math.sin(p * 9) * 0.15;
-          break;
-        case 'idle':
-          rig.body.position.y = 1.05 + Math.sin(p * 1.5) * 0.03;
-          rig.head.rotation.z = Math.sin(p * 0.8) * 0.12;
-          rig.armL.rotation.x = -0.3;
-          rig.armR.rotation.x = -0.3;
-          rig.screenMat.emissiveIntensity = 0.35;
-          break;
-        case 'waiting':
-          rig.body.position.y = 1.05 + Math.abs(Math.sin(p * 4)) * 0.18;
-          rig.armR.rotation.x = -2.9 + Math.sin(p * 6) * 0.15; // raised hand / giơ tay
-          rig.head.rotation.y = Math.sin(p * 1.2) * 0.35;
-          rig.screenMat.emissiveIntensity = 0.7 + Math.sin(p * 5) * 0.3;
-          break;
-        case 'error':
-          rig.body.position.x = Math.sin(p * 40) * 0.03;
-          rig.head.rotation.z = 0.25;
-          rig.head.rotation.x = 0.3;
-          rig.screenMat.emissiveIntensity = Math.sin(p * 8) > 0 ? 1.2 : 0.4;
-          break;
-        case 'paused':
-          rig.head.rotation.x = 0.45; // dozing / ngủ gật
-          rig.body.position.y = 1.0;
-          rig.screenMat.emissiveIntensity = 0.25;
-          break;
+      rig.armL.rotation.set(-1.1, 0, 0);
+      rig.armR.rotation.set(-1.1, 0, 0);
+      rig.armL.position.z = 0.2;
+      rig.armR.position.z = 0.2;
+      for (const leg of rig.legs) leg.rotation.x = -Math.PI / 2;
+      const activity = w.place.kind === 'spot' && !walking ? w.place.spot.activity : null;
+      for (const [name, prop] of Object.entries(rig.props)) prop.visible = !!activity && ACTIVITY_PROP[activity] === name;
+      const [sx, sz] = a.seat;
+      let emoji = STATUS_EMOJI[a.status];
+
+      if (w.place.kind === 'home' && !walking) {
+        // Seated at the desk: status animation. / Ngồi ở bàn: animation theo trạng thái.
+        rig.body.position.set(0, 1.05, -1.05);
+        const visitor = visitorOf.get(a.id);
+        switch (a.status) {
+          case 'working':
+            rig.armL.rotation.x = -1.2 + Math.sin(p * 18) * 0.18;
+            rig.armR.rotation.x = -1.2 + Math.sin(p * 18 + 1.7) * 0.18;
+            rig.head.rotation.x = 0.1 + Math.sin(p * 2) * 0.03;
+            rig.screenMat.emissiveIntensity = 0.8 + Math.sin(p * 9) * 0.15;
+            break;
+          case 'idle':
+            rig.body.position.y = 1.05 + Math.sin(p * 1.5) * 0.03;
+            rig.head.rotation.z = Math.sin(p * 0.8) * 0.12;
+            rig.armL.rotation.x = -0.3;
+            rig.armR.rotation.x = -0.3;
+            rig.screenMat.emissiveIntensity = 0.35;
+            break;
+          case 'waiting':
+            rig.body.position.y = 1.05 + Math.abs(Math.sin(p * 4)) * 0.18;
+            rig.armR.rotation.x = -2.9 + Math.sin(p * 6) * 0.15; // raised hand / giơ tay
+            rig.head.rotation.y = Math.sin(p * 1.2) * 0.35;
+            rig.screenMat.emissiveIntensity = 0.7 + Math.sin(p * 5) * 0.3;
+            break;
+          case 'error':
+            rig.body.position.x = Math.sin(p * 40) * 0.03;
+            rig.head.rotation.z = 0.25;
+            rig.head.rotation.x = 0.3;
+            rig.screenMat.emissiveIntensity = Math.sin(p * 8) > 0 ? 1.2 : 0.4;
+            break;
+          case 'paused':
+            rig.head.rotation.x = 0.45; // dozing / ngủ gật
+            rig.body.position.y = 1.0;
+            rig.screenMat.emissiveIntensity = 0.25;
+            break;
+        }
+        if (visitor) {
+          // Turn to face the colleague who came over. / Quay sang người đồng nghiệp vừa tới.
+          const vw = walkers.get(visitor);
+          if (vw) rig.head.rotation.y = THREE.MathUtils.clamp(Math.atan2(vw.pos.x - w.pos.x, vw.pos.z - w.pos.z), -1.3, 1.3);
+          emoji = '💬';
+        }
+      } else {
+        // Away from the desk: walking, hanging out, or chatting. / Rời bàn: đang đi, đang chơi, hoặc đang nói chuyện.
+        rig.screenMat.emissiveIntensity = 0.3;
+        rig.armL.position.z = 0;
+        rig.armR.position.z = 0;
+        let y = 0.48;
+        let facing = w.facing;
+        if (walking) {
+          const swing = Math.sin(t * 11 + rig.phase);
+          y += Math.abs(swing) * 0.06;
+          (rig.legs[0] as THREE.Group).rotation.x = swing * 0.6;
+          (rig.legs[1] as THREE.Group).rotation.x = -swing * 0.6;
+          rig.armL.rotation.x = -swing * 0.5;
+          rig.armR.rotation.x = swing * 0.5;
+          emoji = w.speed > 3 ? '🏃' : '🚶';
+        } else if (w.place.kind === 'spot') {
+          const spot = w.place.spot;
+          facing = spot.face;
+          emoji = spot.emoji;
+          if (spot.seatY !== null) y = spot.seatY;
+          else for (const leg of rig.legs) leg.rotation.x = 0;
+          switch (spot.activity) {
+            case 'sip': {
+              // Lift the mug every few seconds. / Nâng cốc lên uống mỗi vài giây.
+              const lift = Math.max(0, Math.sin(p * 1.3) - 0.3) / 0.7;
+              rig.armR.rotation.x = -0.4 - lift * 2.0;
+              rig.armL.rotation.x = 0.1;
+              rig.head.rotation.x = -lift * 0.2;
+              break;
+            }
+            case 'game':
+              rig.armL.rotation.x = -1.0 + Math.sin(p * 14) * 0.05;
+              rig.armR.rotation.x = -1.0 + Math.sin(p * 13) * 0.05;
+              rig.armL.rotation.z = -0.35;
+              rig.armR.rotation.z = 0.35;
+              rig.head.rotation.x = 0.35;
+              break;
+            case 'pingpong':
+              rig.armR.rotation.x = -1.3 + Math.sin(p * 5) * 0.8;
+              rig.armR.rotation.z = Math.sin(p * 5) * 0.4;
+              rig.armL.rotation.x = -0.4;
+              y += Math.abs(Math.sin(p * 5)) * 0.08;
+              break;
+            case 'chill':
+              rig.armL.rotation.x = -0.5;
+              rig.armR.rotation.x = -0.5;
+              rig.head.rotation.z = Math.sin(p * 0.7) * 0.15;
+              y += Math.sin(p * 1.2) * 0.02;
+              break;
+            case 'snack':
+              rig.armL.rotation.x = -1.2;
+              rig.armR.rotation.x = -1.2 - Math.max(0, Math.sin(p * 2)) * 0.8;
+              rig.head.rotation.x = 0.15 * Math.sin(p * 2);
+              break;
+          }
+        } else if (w.place.kind === 'visit') {
+          // Chatting beside a colleague's chair. / Đứng nói chuyện cạnh ghế đồng nghiệp.
+          const target = byId.get(w.place.target);
+          if (target) {
+            const c = chairOf(target);
+            facing = Math.atan2(c.x - w.pos.x, c.z - w.pos.z);
+          }
+          for (const leg of rig.legs) leg.rotation.x = 0;
+          rig.armR.rotation.x = -0.9 + Math.sin(p * 4) * 0.4;
+          rig.armL.rotation.x = -0.2;
+          rig.head.rotation.x = Math.sin(p * 3) * 0.08;
+          emoji = '💬';
+        }
+        w.facing += angleDelta(w.facing, facing) * Math.min(1, dt * 8);
+        rig.body.position.set(w.pos.x - sx, y, w.pos.z - sz);
+        rig.body.rotation.y = w.facing;
       }
-      renderLabel(a, rig);
+      renderLabel(a, rig, emoji);
     }
 
     // Department sign counters: working / total. / Bộ đếm trên biển phòng ban: đang làm / tổng.
@@ -710,10 +985,11 @@ export function createOfficeScene(container: HTMLElement, initial: OfficeState, 
       if (task) (n.material as THREE.MeshStandardMaterial).color.set(NOTE_COLOR[task.status] ?? '#ffe680');
     });
 
-    // Envelopes fly desk → meeting room (bus) → desk. / Phong thư bay bàn → phòng họp (bus) → bàn.
+    // Envelope fallback when the sender can't walk over. / Phong thư bay khi người gửi không đi bộ được.
     const now = Date.now();
     const live = new Set<string>();
     for (const f of state.flights) {
+      if (walkedFlights.has(f.id)) continue; // delivered on foot / đã đi bộ tới đưa tin
       live.add(f.id);
       let env = envelopes.get(f.id);
       if (!env) {

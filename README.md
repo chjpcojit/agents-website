@@ -20,7 +20,8 @@ npm run build:single   # dist-single/index.html — 1 file tự chứa, dùng đ
 | Trạng thái agent | Nhân vật ở bàn: gõ phím (working), giơ tay (waiting), lắc + màn hình đỏ (error), ngủ gật (paused), thư giãn (idle); vòng màu dưới ghế + bảng tên có context bar |
 | Giao việc / chat / stream | Tab **Agent**: stream log (user / assistant / tool_call / tool_result), ô giao việc, Pause/Resume, Cancel, Retry, `/compact` |
 | Queue + concurrency | Giới hạn 4 agent chạy cùng lúc, task vượt limit nằm trong queue |
-| Office bus | Tab **Office bus** + phong thư bay giữa các bàn trong scene; turn counter, vượt 6 lượt/cặp thì chặn (anti-loop) |
+| Office bus | Tab **Office bus**; trong scene, agent gửi tin sẽ đứng dậy đi tới bàn người nhận nói chuyện rồi về (phong thư bay nếu người gửi đang không ở bàn); turn counter, vượt 6 lượt/cặp thì chặn (anti-loop) |
+| Di chuyển | Agent rảnh rời bàn đi uống cà phê, ăn vặt ở pantry, ngồi sofa chơi game, ghế lười đọc sách, đánh bóng bàn; có task thì chạy về bàn. Đi theo hành lang + lối dọc (`src/scene/walkers.ts`) |
 | Duyệt tập trung | Tab **Duyệt**: tool permission + câu hỏi của agent, đánh dấu high-risk, countdown, hết giờ → deny, không có "always allow" |
 | Theo dõi | Quota Max 5h/tuần, task board (cũng hiện dạng giấy note trên bảng trắng trong scene), audit log |
 
