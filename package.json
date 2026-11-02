@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "build:single": "vite build -c vite.single.config.ts"
+    "build:single": "vite build -c vite.single.config.ts",
+    "build:single:v2": "vite build -c vite.single.config.ts --mode v2"
   },
   "dependencies": {
     "three": "^0.180.0"

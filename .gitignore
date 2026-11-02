@@ -5,3 +5,4 @@ dist-single/
 .DS_Store
 .svelte-kit/
 build/
+dist-single-v2/
