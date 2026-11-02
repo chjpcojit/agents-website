@@ -1,6 +1,6 @@
 <script lang="ts">
   // Tiny circular gauge. / Đồng hồ tròn nhỏ.
-  let { value, size = 34, color = '#9ef6ff', label = '' }: { value: number; size?: number; color?: string; label?: string } = $props();
+  let { value, size = 34, color = 'rgba(255,255,255,0.75)', label = '' }: { value: number; size?: number; color?: string; label?: string } = $props();
   const r = $derived(size / 2 - 3);
   const len = $derived(2 * Math.PI * r);
 </script>

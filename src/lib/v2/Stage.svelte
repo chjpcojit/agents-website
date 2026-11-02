@@ -41,8 +41,7 @@
         if (k < 0 || k >= 1) return null;
         const { c, d } = curveThroughCore(a, b);
         const p = pointOnQuad(a, c, b, k);
-        const fromAgent = $office.agents.find((x) => x.id === f.from);
-        return { id: f.id, d, p, k, color: fromAgent?.color ?? '#5ef2ff' };
+        return { id: f.id, d, p, k, color: '#ffffff' };
       })
       .filter((x) => x !== null),
   );
@@ -64,17 +63,15 @@
     <filter id="soft" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="14" /></filter>
     <radialGradient id="core-grad" cx="40%" cy="35%" r="70%">
       <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="35%" stop-color="#9ef6ff" />
-      <stop offset="70%" stop-color="#7b6bff" />
-      <stop offset="100%" stop-color="#2a1d6b" />
+      <stop offset="45%" stop-color="#d9dce3" />
+      <stop offset="100%" stop-color="#6b6f7a" />
     </radialGradient>
-    {#each $office.agents as a (a.id)}
-      <radialGradient id="orb-{a.id}" cx="35%" cy="30%" r="75%">
-        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
-        <stop offset="40%" stop-color={a.color} />
-        <stop offset="100%" stop-color="#0b0d1a" />
-      </radialGradient>
-    {/each}
+    <!-- One neutral glass gradient for every orb; status is shown by a thin ring only. / Một gradient kính trung tính cho mọi orb; trạng thái chỉ thể hiện qua vòng mảnh. -->
+    <radialGradient id="orb" cx="35%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#f4f5f7" />
+      <stop offset="45%" stop-color="#8d929d" />
+      <stop offset="100%" stop-color="#16181d" />
+    </radialGradient>
   </defs>
 
   <!-- Orbit guides. / Quỹ đạo định hướng. -->
@@ -83,30 +80,30 @@
 
   <!-- Department labels. / Nhãn phòng ban. -->
   {#each depts as d (d.id)}
-    <text x={d.at.x} y={d.at.y} text-anchor={d.anchor} class="dept" fill={d.accent}>{d.name.toUpperCase()}</text>
+    <text x={d.at.x} y={d.at.y} text-anchor={d.anchor} class="dept">{d.name.toUpperCase()}</text>
   {/each}
 
   <!-- Data links core ↔ agent; flowing when the agent is busy. / Link dữ liệu core ↔ agent; chạy khi agent bận. -->
   {#each $office.agents as a (a.id)}
     {@const p = nodes.get(a.id)}
     {#if p}
-      <line x1={CORE.x} y1={CORE.y} x2={p.x} y2={p.y} class="link" stroke={NEON[a.status]} class:live={a.status === 'working'} class:dim={a.status === 'idle' || a.status === 'paused'} />
+      <line x1={CORE.x} y1={CORE.y} x2={p.x} y2={p.y} class="link" class:live={a.status === 'working'} class:dim={a.status === 'idle' || a.status === 'paused'} />
     {/if}
   {/each}
 
   <!-- Bus message pulses travelling between agents via the core. / Tia tin nhắn bus đi giữa các agent qua core. -->
   {#each pulses as pl (pl.id)}
     <path d={pl.d} class="trail" stroke={pl.color} style:opacity={Math.sin(pl.k * Math.PI) * 0.7} />
-    <circle cx={pl.p.x} cy={pl.p.y} r="10" fill={pl.color} filter="url(#soft)" />
-    <circle cx={pl.p.x} cy={pl.p.y} r="4" fill="#fff" />
+    <circle cx={pl.p.x} cy={pl.p.y} r="8" fill={pl.color} opacity="0.25" filter="url(#soft)" />
+    <circle cx={pl.p.x} cy={pl.p.y} r="2.5" fill="#fff" />
   {/each}
 
   <!-- Orchestrator core. / Core orchestrator. -->
   <g class="core" transform="translate({CORE.x} {CORE.y})">
-    <circle r={CORE.r + 30} fill="#6b5bff" opacity="0.18" filter="url(#soft)" class="breath" />
+    <circle r={CORE.r + 30} fill="#ffffff" opacity="0.06" filter="url(#soft)" class="breath" />
     <circle r={CORE.r + 22} class="ring r1" />
     <circle r={CORE.r + 12} class="ring r2" />
-    <circle r={CORE.r} fill="url(#core-grad)" filter="url(#glow)" />
+    <circle r={CORE.r} fill="url(#core-grad)" />
     <text y="-6" class="core-title">CORE</text>
     <text y="14" class="core-sub">{running} RUN · {pending} DUYỆT</text>
   </g>
@@ -129,7 +126,7 @@
         onclick={() => store.select(sel ? null : a.id)}
         onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && store.select(a.id)}
       >
-        <circle r="46" fill={NEON[a.status]} opacity="0.12" filter="url(#soft)" class="halo" />
+        <circle r="46" fill="#ffffff" opacity="0" filter="url(#soft)" class="halo" />
         {#if a.status === 'waiting' || a.status === 'error'}
           <circle r={CTX_R} class="ripple" stroke={NEON[a.status]} />
           <circle r={CTX_R} class="ripple d2" stroke={NEON[a.status]} />
@@ -139,17 +136,17 @@
         <circle
           r={CTX_R}
           class="ctx"
-          stroke={a.context >= 0.8 ? '#ff5c7c' : a.context >= 0.6 ? '#ffc46b' : '#9ef6ff'}
+          stroke={a.context >= 0.8 ? NEON.error : a.context >= 0.6 ? NEON.waiting : 'rgba(255,255,255,0.7)'}
           stroke-dasharray="{CTX_LEN * a.context} {CTX_LEN}"
           transform="rotate(-90)"
         />
         {#if a.status === 'working'}
-          <circle r="40" class="spin" stroke={NEON.working} />
+          <circle r="40" class="spin" />
         {/if}
-        <circle r={R} fill="url(#orb-{a.id})" filter="url(#glow)" class="orb" />
+        <circle r={R} fill="url(#orb)" class="orb" />
         <text y="5" class="initial">{a.name.slice(0, 1)}</text>
         <text x={lx} y={ly} text-anchor={anchor} class="name">{a.name}</text>
-        <text x={lx} y={ly + 16} text-anchor={anchor} class="status" fill={NEON[a.status]}>● {STATUS_TEXT[a.status]}</text>
+        <text x={lx} y={ly + 16} text-anchor={anchor} class="status"><tspan fill={NEON[a.status]}>●</tspan> {STATUS_TEXT[a.status]}</text>
         <text x={lx} y={ly + 31} text-anchor={anchor} class="act">{activity(a)}</text>
       </g>
     {/if}
@@ -158,22 +155,22 @@
 
 <style>
   .stage { width: 100%; height: 100%; display: block; overflow: visible; }
-  .orbit { fill: none; stroke: rgba(158, 246, 255, 0.12); stroke-dasharray: 2 8; }
-  .orbit.faint { stroke: rgba(155, 123, 255, 0.1); }
-  .dept { font: 600 11px 'JetBrains Mono', monospace; letter-spacing: 2.5px; opacity: 0.75; }
+  .orbit { fill: none; stroke: rgba(255, 255, 255, 0.07); stroke-dasharray: 1 7; }
+  .orbit.faint { stroke: rgba(255, 255, 255, 0.04); }
+  .dept { font: 600 11px 'JetBrains Mono', monospace; letter-spacing: 2.5px; fill: rgba(255, 255, 255, 0.28); }
 
-  .link { stroke-width: 1.2; opacity: 0.35; stroke-dasharray: 3 7; }
-  .link.live { opacity: 0.75; animation: flow 1.2s linear infinite; }
-  .link.dim { opacity: 0.12; }
+  .link { stroke: #fff; stroke-width: 1; opacity: 0.1; stroke-dasharray: 3 7; }
+  .link.live { opacity: 0.35; animation: flow 1.2s linear infinite; }
+  .link.dim { opacity: 0.05; }
   @keyframes flow { to { stroke-dashoffset: -20; } }
 
-  .trail { fill: none; stroke-width: 1.5; }
+  .trail { fill: none; stroke-width: 1; }
 
   .core-title { fill: #0b0c1d; font: 700 15px 'Space Grotesk', sans-serif; text-anchor: middle; letter-spacing: 4px; }
   .core-sub { fill: rgba(11, 12, 29, 0.75); font: 500 9px 'JetBrains Mono', monospace; text-anchor: middle; letter-spacing: 1px; }
   .ring { fill: none; stroke-width: 1; transform-box: fill-box; transform-origin: center; }
-  .ring.r1 { stroke: rgba(158, 246, 255, 0.45); stroke-dasharray: 40 18 4 18; animation: rot 18s linear infinite; }
-  .ring.r2 { stroke: rgba(155, 123, 255, 0.6); stroke-dasharray: 2 6; animation: rot 9s linear infinite reverse; }
+  .ring.r1 { stroke: rgba(255, 255, 255, 0.22); stroke-dasharray: 40 18 4 18; animation: rot 18s linear infinite; }
+  .ring.r2 { stroke: rgba(255, 255, 255, 0.12); stroke-dasharray: 2 6; animation: rot 9s linear infinite reverse; }
   .breath { animation: breath 4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
   @keyframes rot { to { transform: rotate(360deg); } }
   @keyframes breath { 50% { transform: scale(1.12); opacity: 0.28; } }
@@ -184,22 +181,22 @@
   .agent:focus-visible .ctx-track { stroke: #fff; }
   .ctx-track { fill: none; stroke: rgba(255, 255, 255, 0.08); stroke-width: 3; }
   .ctx { fill: none; stroke-width: 3; stroke-linecap: round; transition: stroke-dasharray 0.6s; }
-  .spin { fill: none; stroke-width: 1.2; stroke-dasharray: 18 10 2 10; opacity: 0.8; transform-box: fill-box; transform-origin: center; animation: rot 3s linear infinite; }
-  .ripple { fill: none; stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: ripple 1.8s ease-out infinite; }
+  .spin { fill: none; stroke: rgba(255, 255, 255, 0.45); stroke-width: 1; stroke-dasharray: 18 10 2 10; opacity: 0.8; transform-box: fill-box; transform-origin: center; animation: rot 3s linear infinite; }
+  .ripple { fill: none; stroke-width: 1.5; transform-box: fill-box; transform-origin: center; opacity: 0.5; animation: ripple 2.4s ease-out infinite; }
   .ripple.d2 { animation-delay: 0.9s; }
-  @keyframes ripple { from { transform: scale(1); opacity: 0.8; } to { transform: scale(1.9); opacity: 0; } }
+  @keyframes ripple { from { transform: scale(1); opacity: 0.5; } to { transform: scale(1.6); opacity: 0; } }
   .halo { transition: opacity 0.4s; }
-  .agent.sel .halo { opacity: 0.35; }
-  .s-idle .orb, .s-paused .orb { opacity: 0.55; }
+  .agent.sel .halo { opacity: 0.12; }
+  .s-idle .orb, .s-paused .orb { opacity: 0.4; }
   .s-error .orb { animation: glitch 2.4s steps(1) infinite; }
   @keyframes glitch { 0%, 92%, 100% { transform: translate(0, 0); } 94% { transform: translate(-2px, 1px); } 96% { transform: translate(2px, -1px); } }
 
   .initial { fill: rgba(5, 6, 12, 0.55); font: 700 15px 'Space Grotesk', sans-serif; text-anchor: middle; pointer-events: none; }
-  .name { fill: #eef1ff; font: 600 15px 'Space Grotesk', sans-serif; }
-  .status { font: 600 9px 'JetBrains Mono', monospace; letter-spacing: 1.5px; }
-  .act { fill: rgba(200, 210, 255, 0.55); font: 400 9.5px 'JetBrains Mono', monospace; }
-  .agent.sel .name { fill: #9ef6ff; }
-  .agent.sel .ctx-track { stroke: rgba(158, 246, 255, 0.35); }
+  .name { fill: #f2f3f5; font: 600 15px 'Space Grotesk', sans-serif; }
+  .status { font: 600 9px 'JetBrains Mono', monospace; letter-spacing: 1.5px; fill: rgba(255, 255, 255, 0.5); }
+  .act { fill: rgba(255, 255, 255, 0.32); font: 400 9.5px 'JetBrains Mono', monospace; }
+  .agent.sel .name { fill: #fff; }
+  .agent.sel .ctx-track { stroke: rgba(255, 255, 255, 0.3); }
 
   /* Phones: the SVG scales down a lot, so keep only big names. / Điện thoại: SVG bị thu nhỏ nhiều nên chỉ giữ tên cỡ lớn. */
   @media (max-width: 600px) {

@@ -30,7 +30,7 @@
   {#if agent}
     <header class="ahead">
       <button class="back" onclick={() => store.select(null)} aria-label="Quay lại">←</button>
-      <span class="dot" style:background={agent.color} style:box-shadow="0 0 16px {agent.color}"></span>
+      <span class="dot" style:background={NEON[agent.status]}></span>
       <div class="grow">
         <h2>{agent.name}</h2>
         <small>{agent.roleLabel} · {DEPARTMENTS.find((d) => d.id === agent.dept)?.name}</small>
@@ -72,7 +72,7 @@
         {#each feed as e (e.id)}
           {@const a = agents.get(e.agentId)}
           <li class="k-{e.kind}">
-            <span class="who" style:color={a?.color}>{a?.name}</span>
+            <span class="who">{a?.name}</span>
             <span class="t"><em>{KIND[e.kind]}</em> {e.text}</span>
             <time>{ago($office.now, e.ts)}</time>
           </li>
@@ -83,7 +83,7 @@
       <ol class="feed bus">
         {#each $office.bus.slice(-40).reverse() as m (m.id)}
           <li class:blocked={m.blocked}>
-            <span class="who" style:color={agents.get(m.from)?.color}>{name(m.from)} → {name(m.to)}</span>
+            <span class="who">{name(m.from)} → {name(m.to)}</span>
             <span class="t">{m.text}{#if m.turn > 0 && !m.to.startsWith('#')}<em> · {m.turn}/{$office.turnLimit}</em>{/if}</span>
             <time>{ago($office.now, m.ts)}</time>
           </li>
@@ -96,7 +96,7 @@
         {#each items as t (t.id)}
           {@const a = agents.get(t.assignee)}
           <button class="trow s-{t.status}" onclick={() => store.select(t.assignee)}>
-            <i style:background={a?.color}></i><span class="grow">{t.title}</span><small>{a?.name}</small>
+            <i></i><span class="grow">{t.title}</span><small>{a?.name}</small>
           </button>
         {/each}
       {/each}
@@ -120,31 +120,31 @@
   .grow { flex: 1; min-width: 0; }
   .tabs { display: flex; gap: 4px; padding: 4px; background: rgba(255, 255, 255, 0.04); border-radius: 12px; margin-bottom: 12px; }
   .tabs button { flex: 1; border: 0; background: transparent; color: var(--h-muted); font: 600 12px 'Space Grotesk', sans-serif; padding: 7px; border-radius: 9px; cursor: pointer; letter-spacing: 0.5px; }
-  .tabs button.on { background: rgba(158, 246, 255, 0.12); color: #eef1ff; box-shadow: inset 0 0 0 1px rgba(158, 246, 255, 0.25); }
+  .tabs button.on { background: rgba(255, 255, 255, 0.08); color: #f2f3f5; }
   .feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
   .feed li { display: grid; grid-template-columns: 52px 1fr auto; gap: 8px; padding: 7px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); font: 11.5px/1.45 'JetBrains Mono', monospace; animation: fade 0.4s ease-out; }
   .feed.bus li { grid-template-columns: 1fr auto; }
   .feed.bus .who { grid-column: 1 / -1; }
   @keyframes fade { from { opacity: 0; transform: translateX(6px); } }
-  .feed .who { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .feed .who { color: #f2f3f5; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .feed .k { font-weight: 600; color: var(--h-muted); }
   .feed em { font-style: normal; color: var(--h-muted); }
-  .feed .t { color: #cfd5f5; overflow-wrap: anywhere; }
-  .feed time { color: rgba(160, 170, 210, 0.45); font-size: 10px; }
-  .k-tool_call .t, .k-tool_call .k { color: #9ef6ff; }
-  .k-tool_result .t { color: #8cf5c6; }
-  .k-user .t { color: #ffd59a; }
-  .k-error .t, .k-error .k { color: #ff8aa1; }
+  .feed .t { color: #c9ccd3; overflow-wrap: anywhere; }
+  .feed time { color: rgba(255, 255, 255, 0.28); font-size: 10px; }
+  .k-tool_call .t, .k-tool_call .k { color: #eceef1; }
+  .k-tool_result .t { color: #8d929d; }
+  .k-user .t { color: #f2f3f5; font-weight: 500; }
+  .k-error .t, .k-error .k { color: #e8737f; }
   .k-system .t { color: var(--h-muted); font-style: italic; }
   .blocked { opacity: 0.5; }
   .note { font: 11px 'JetBrains Mono', monospace; color: var(--h-muted); margin: 0 0 8px; }
   h3 { font: 600 10px 'JetBrains Mono', monospace; letter-spacing: 2.5px; color: var(--h-muted); margin: 14px 0 6px; display: flex; justify-content: space-between; }
   .trow { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: rgba(255, 255, 255, 0.03); border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; margin-bottom: 4px; color: #e6eaff; font: 500 12.5px 'Space Grotesk', sans-serif; cursor: pointer; }
   .trow:hover { border-color: var(--h-line); }
-  .trow i { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+  .trow i { width: 6px; height: 6px; border-radius: 50%; flex: none; background: rgba(255, 255, 255, 0.35); }
   .trow small { color: var(--h-muted); font: 10px 'JetBrains Mono', monospace; }
-  .trow.s-failed { box-shadow: inset 2px 0 0 #ff5c7c; }
-  .trow.s-running { box-shadow: inset 2px 0 0 #4dffc3; }
+  .trow.s-failed { box-shadow: inset 2px 0 0 #e8737f; }
+  .trow.s-running { box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.6); }
 
   .ahead { display: flex; align-items: center; gap: 10px; }
   .back { border: 1px solid var(--h-line); background: transparent; color: #eef1ff; border-radius: 10px; width: 32px; height: 32px; cursor: pointer; }
@@ -154,15 +154,15 @@
   .st { font: 600 10px 'JetBrains Mono', monospace; letter-spacing: 1.5px; }
   dl { display: grid; grid-template-columns: 84px 1fr; gap: 6px 10px; margin: 16px 0 12px; font: 11.5px 'JetBrains Mono', monospace; }
   dt { color: var(--h-muted); letter-spacing: 1.5px; font-size: 10px; padding-top: 1px; }
-  dd { margin: 0; color: #dfe4ff; overflow-wrap: anywhere; }
+  dd { margin: 0; color: #d9dce3; overflow-wrap: anywhere; }
   dd.task { font-family: 'Space Grotesk', sans-serif; font-size: 13px; }
   .ctx { display: flex; align-items: center; gap: 10px; font: 10px 'JetBrains Mono', monospace; color: var(--h-muted); letter-spacing: 1.5px; }
   .ctx b { color: #eef1ff; font-weight: 500; }
   .track { flex: 1; height: 4px; background: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden; }
-  .track i { display: block; height: 100%; background: linear-gradient(90deg, #5ef2ff, #9b7bff); border-radius: 4px; transition: width 0.6s; }
-  .track i.hot { background: linear-gradient(90deg, #ffc46b, #ff5c7c); }
+  .track i { display: block; height: 100%; background: rgba(255, 255, 255, 0.75); border-radius: 4px; transition: width 0.6s; }
+  .track i.hot { background: #e3b66f; }
   .ctrl { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 4px; }
   .ctrl button { font: 600 12px 'Space Grotesk', sans-serif; color: #eef1ff; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--h-line); border-radius: 10px; padding: 6px 12px; cursor: pointer; }
   .ctrl button:disabled { opacity: 0.35; cursor: not-allowed; }
-  .ctrl button:not(:disabled):hover { border-color: rgba(158, 246, 255, 0.5); }
+  .ctrl button:not(:disabled):hover { border-color: rgba(255, 255, 255, 0.3); }
 </style>

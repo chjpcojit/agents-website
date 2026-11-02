@@ -41,7 +41,7 @@
 </script>
 
 <form class="bar" onsubmit={send}>
-  <label class="to" style:--c={agent?.color ?? '#9ef6ff'}>
+  <label class="to" >
     <i></i>
     <select bind:value={target} aria-label="Chọn agent">
       {#each $office.agents as a (a.id)}<option value={a.id}>@{a.name}</option>{/each}
@@ -58,19 +58,19 @@
   .bar {
     position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 10px;
     width: min(680px, 100%); margin: 0 auto; border-radius: 999px;
-    background: rgba(12, 14, 28, 0.72); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
-    border: 1px solid rgba(158, 246, 255, 0.18);
-    box-shadow: 0 0 0 1px rgba(155, 123, 255, 0.08), 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 40px rgba(94, 242, 255, 0.08);
+    background: rgba(18, 19, 23, 0.8); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
   }
-  .bar:focus-within { border-color: rgba(158, 246, 255, 0.5); box-shadow: 0 0 0 4px rgba(94, 242, 255, 0.08), 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 50px rgba(94, 242, 255, 0.15); }
+  .bar:focus-within { border-color: rgba(255, 255, 255, 0.28); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.04), 0 20px 50px rgba(0, 0, 0, 0.5); }
   .to { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); }
-  .to i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }
+  .to i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.6); }
   select { background: transparent; border: 0; color: #eef1ff; font: 600 13px 'Space Grotesk', sans-serif; outline: none; cursor: pointer; }
-  select option { background: #0c0e1c; }
+  select option { background: #141519; }
   input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: #eef1ff; font: 400 14.5px 'Space Grotesk', sans-serif; padding: 8px 4px; }
-  input::placeholder { color: rgba(200, 210, 255, 0.4); }
+  input::placeholder { color: rgba(255, 255, 255, 0.32); }
   kbd { font: 10px 'JetBrains Mono', monospace; color: var(--h-muted); border: 1px solid var(--h-line); border-radius: 6px; padding: 2px 6px; }
-  button { width: 38px; height: 38px; border-radius: 50%; border: 0; display: grid; place-items: center; color: #05060c; cursor: pointer; background: linear-gradient(135deg, #5ef2ff, #9b7bff 60%, #ff6bd6); transition: opacity 0.2s, transform 0.2s; }
+  button { width: 38px; height: 38px; border-radius: 50%; border: 0; display: grid; place-items: center; color: #08090b; cursor: pointer; background: #f2f3f5; transition: opacity 0.2s, transform 0.2s; }
   button:disabled { opacity: 0.3; cursor: not-allowed; }
   button:not(:disabled):hover { transform: scale(1.06); }
   @media (max-width: 600px) { kbd { display: none; } }
