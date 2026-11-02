@@ -3,7 +3,7 @@
   import { store } from '../sim/store';
   import type { Agent, StreamEvent } from '../sim/types';
   import { office } from '../stores/office';
-  import { CORE, RX, RY, VIEW, curveThroughCore, layoutConstellation, pointOnQuad } from './layout';
+  import { CORE, RX, RY, STORES, VIEW, curveAwayFromCore, curveThroughCore, layoutConstellation, pointOnQuad, storeAccess, type AccessOp, type Point, type StoreId } from './layout';
   import { NEON, STATUS_TEXT } from './theme';
 
   // Agents never move between departments in the demo, so the layout is computed once.
@@ -46,11 +46,82 @@
       .filter((x) => x !== null),
   );
 
+  // ---- Data-store traffic. / Lưu lượng tới kho dữ liệu. ----
+  const BEAM_MS = 1300;
+  const storeAt = new Map(STORES.map((s) => [s.id, s]));
+
+  interface Access {
+    id: string;
+    store: StoreId;
+    op: AccessOp;
+    /** Agent id, or 'core' for orchestrator writes. / Id agent, hoặc 'core' khi orchestrator ghi. */
+    from: string;
+    label: string;
+    ts: number;
+  }
+
+  // Accesses derived from the agent stream plus orchestrator audit writes to SQLite.
+  // Các lượt truy xuất lấy từ stream của agent cộng với việc orchestrator ghi audit vào SQLite.
+  const accesses = $derived.by(() => {
+    const out: Access[] = [];
+    for (const e of $office.stream) {
+      const m = storeAccess(e.kind, e.text);
+      if (m) out.push({ id: e.id, store: m.store, op: m.op, from: e.agentId, label: e.text, ts: e.ts });
+    }
+    for (const e of $office.audit) out.push({ id: e.id, store: 'db', op: 'write', from: 'core', label: e.action, ts: e.ts });
+    for (const m of $office.bus) out.push({ id: m.id, store: 'db', op: 'write', from: 'core', label: `bus ${m.from} → ${m.to}`, ts: m.ts });
+    return out;
+  });
+
+  // Running read/write counters; ids are remembered so trimmed history doesn't double count.
+  // Bộ đếm read/write cộng dồn; nhớ id để lịch sử bị cắt bớt không bị đếm lại.
+  const seen = new Set<string>();
+  let counts = $state<Record<StoreId, { r: number; w: number; last: string; at: number }>>({
+    repo: { r: 0, w: 0, last: '—', at: 0 },
+    github: { r: 0, w: 0, last: '—', at: 0 },
+    transcript: { r: 0, w: 0, last: '—', at: 0 },
+    db: { r: 0, w: 0, last: '—', at: 0 },
+  });
+  $effect(() => {
+    for (const a of accesses) {
+      if (seen.has(a.id)) continue;
+      seen.add(a.id);
+      const c = counts[a.store];
+      if (a.op === 'read') c.r++;
+      else c.w++;
+      if (a.ts >= c.at) {
+        c.at = a.ts;
+        c.last = a.label.length > 22 ? `${a.label.slice(0, 21)}…` : a.label;
+      }
+    }
+  });
+
+  const beams = $derived(
+    accesses
+      .map((x) => {
+        const k = (now - x.ts) / BEAM_MS;
+        if (k < 0 || k >= 1) return null;
+        const s = storeAt.get(x.store)!;
+        const agentPt: Point | undefined = x.from === 'core' ? CORE : nodes.get(x.from);
+        if (!agentPt) return null;
+        // Reads travel store → agent, writes agent → store. / Read đi kho → agent, write đi agent → kho.
+        const [a, b] = x.op === 'read' ? [s, agentPt] : [agentPt, s];
+        const { c, d } = curveAwayFromCore(a, b);
+        return { id: x.id, d, p: pointOnQuad(a, c, b, k), k, op: x.op };
+      })
+      .filter((x) => x !== null),
+  );
+  const hot = $derived(new Set(beams.map((b) => accesses.find((x) => x.id === b.id)?.store)));
+
   function activity(a: Agent): string {
-    if (a.status === 'error') return a.lastError ?? 'error';
+    if (a.status === 'error') return trunc(a.lastError ?? 'error');
     const e = lastEvent.get(a.id);
     if (!e) return '—';
-    return e.text.length > 26 ? `${e.text.slice(0, 25)}…` : e.text;
+    return trunc(e.text);
+  }
+
+  function trunc(t: string): string {
+    return t.length > 26 ? `${t.slice(0, 25)}…` : t;
   }
 </script>
 
@@ -70,7 +141,7 @@
     <radialGradient id="orb" cx="35%" cy="30%" r="80%">
       <stop offset="0%" stop-color="#f4f5f7" />
       <stop offset="45%" stop-color="#8d929d" />
-      <stop offset="100%" stop-color="#16181d" />
+      <stop offset="100%" stop-color="#2b2e36" />
     </radialGradient>
   </defs>
 
@@ -89,6 +160,30 @@
     {#if p}
       <line x1={CORE.x} y1={CORE.y} x2={p.x} y2={p.y} class="link" class:live={a.status === 'working'} class:dim={a.status === 'idle' || a.status === 'paused'} />
     {/if}
+  {/each}
+
+  <!-- Data-store beams: dashed path + travelling packet. / Tia tới kho dữ liệu: đường đứt + gói tin di chuyển. -->
+  {#each beams as b (b.id)}
+    <path d={b.d} class="beam" class:w={b.op === 'write'} style:opacity={Math.sin(b.k * Math.PI) * 0.6} />
+    <rect x={b.p.x - 3} y={b.p.y - 3} width="6" height="6" rx="1.5" class="packet" class:w={b.op === 'write'} />
+  {/each}
+
+  <!-- Data stores. / Kho dữ liệu. -->
+  {#each STORES as s (s.id)}
+    {@const c = counts[s.id]}
+    <g class="store" class:hot={hot.has(s.id)} transform="translate({s.x} {s.y})">
+      <circle r="38" class="store-glow" filter="url(#soft)" />
+      <!-- Cylinder glyph. / Biểu tượng hình trụ. -->
+      <path d="M-18,-14 v28 a18,6 0 0 0 36,0 v-28" class="cyl" />
+      <ellipse cx="0" cy="-14" rx="18" ry="6" class="cyl top" />
+      <path d="M-18,-2 a18,6 0 0 0 36,0 M-18,8 a18,6 0 0 0 36,0" class="cyl-band" />
+      <g transform="translate(0 40)">
+        <text class="store-name" text-anchor="middle">{s.name}</text>
+        <text y="13" class="store-path" text-anchor="middle">{s.path}</text>
+        <text y="27" class="store-io" text-anchor="middle">R {c.r} · W {c.w}</text>
+        <text y="40" class="store-last" text-anchor="middle">{c.last}</text>
+      </g>
+    </g>
   {/each}
 
   <!-- Bus message pulses travelling between agents via the core. / Tia tin nhắn bus đi giữa các agent qua core. -->
@@ -166,6 +261,21 @@
 
   .trail { fill: none; stroke-width: 1; }
 
+  .beam { fill: none; stroke: #fff; stroke-width: 1; stroke-dasharray: 2 4; }
+  .beam.w { stroke: #9fd9c2; }
+  .packet { fill: #fff; }
+  .packet.w { fill: #9fd9c2; }
+  .store .cyl { fill: rgba(255, 255, 255, 0.06); stroke: rgba(255, 255, 255, 0.35); stroke-width: 1; }
+  .store .cyl.top { fill: rgba(255, 255, 255, 0.14); }
+  .store .cyl-band { fill: none; stroke: rgba(255, 255, 255, 0.18); stroke-width: 1; }
+  .store-glow { fill: #fff; opacity: 0; transition: opacity 0.35s; }
+  .store.hot .store-glow { opacity: 0.1; }
+  .store.hot .cyl { stroke: rgba(255, 255, 255, 0.8); }
+  .store-name { fill: #f2f3f5; font: 600 12.5px 'Space Grotesk', sans-serif; }
+  .store-path { fill: rgba(255, 255, 255, 0.45); font: 400 9px 'JetBrains Mono', monospace; }
+  .store-io { fill: rgba(255, 255, 255, 0.7); font: 500 9px 'JetBrains Mono', monospace; letter-spacing: 1px; }
+  .store-last { fill: rgba(255, 255, 255, 0.35); font: 400 8.5px 'JetBrains Mono', monospace; }
+
   .core-title { fill: #0b0c1d; font: 700 15px 'Space Grotesk', sans-serif; text-anchor: middle; letter-spacing: 4px; }
   .core-sub { fill: rgba(11, 12, 29, 0.75); font: 500 9px 'JetBrains Mono', monospace; text-anchor: middle; letter-spacing: 1px; }
   .ring { fill: none; stroke-width: 1; transform-box: fill-box; transform-origin: center; }
@@ -200,12 +310,14 @@
 
   /* Phones: the SVG scales down a lot, so keep only big names. / Điện thoại: SVG bị thu nhỏ nhiều nên chỉ giữ tên cỡ lớn. */
   @media (max-width: 600px) {
-    .act, .status, .dept, .core-sub { display: none; }
+    .act, .status, .dept, .core-sub, .store-path, .store-io, .store-last { display: none; }
+    .store-name { font-size: 20px; }
     .name { font-size: 26px; }
     .core-title { font-size: 20px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .ring, .spin, .ripple, .breath, .link.live, .s-error .orb { animation: none; }
+    .beam, .packet { display: none; }
   }
 </style>

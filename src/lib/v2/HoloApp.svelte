@@ -7,8 +7,8 @@
   import Panel from './Panel.svelte';
   import Stage from './Stage.svelte';
 
-  // v2 "AI assistant" UI: no 3D, dark glass + neon, same mock orchestrator as v1.
-  // Giao diện v2 kiểu "trợ lý AI": không 3D, kính tối + neon, dùng chung orchestrator giả lập với v1.
+  // v2 "AI assistant" UI: no 3D, soft graphite glass, same mock orchestrator as v1.
+  // Giao diện v2 kiểu "trợ lý AI": không 3D, kính graphite dịu, dùng chung orchestrator giả lập với v1.
   onMount(() => {
     store.start();
     return () => store.stop();
@@ -33,15 +33,15 @@
 
 <style>
   .holo {
-    --h-bg: #08090b;
-    --h-glass: rgba(20, 21, 25, 0.6);
-    --h-line: rgba(255, 255, 255, 0.08);
-    --h-muted: #7c808a;
+    --h-bg: #16181d;
+    --h-glass: rgba(42, 45, 53, 0.55);
+    --h-line: rgba(255, 255, 255, 0.1);
+    --h-muted: #959ba6;
     position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden;
-    background: var(--h-bg); color: #eceef1; font-family: 'Space Grotesk', system-ui, sans-serif;
+    background: radial-gradient(ellipse at 38% 45%, #2a2e37 0%, #1b1d23 55%, var(--h-bg) 100%); color: #eceef1; font-family: 'Space Grotesk', system-ui, sans-serif;
     color-scheme: dark;
   }
-  .aurora { position: absolute; inset: 0; pointer-events: none; filter: blur(80px); opacity: 0.55; }
+  .aurora { position: absolute; inset: 0; pointer-events: none; filter: blur(80px); opacity: 0.8; }
   .aurora span { position: absolute; border-radius: 50%; }
   .a1 { width: 46vw; height: 46vw; left: 12%; top: 8%; background: radial-gradient(circle, rgba(120, 130, 160, 0.35) 0%, transparent 65%); animation: drift 22s ease-in-out infinite; }
   .a2 { width: 38vw; height: 38vw; right: 18%; top: 30%; background: radial-gradient(circle, rgba(90, 110, 130, 0.25) 0%, transparent 65%); animation: drift 28s ease-in-out infinite reverse; opacity: 0.6; }
@@ -49,7 +49,7 @@
   @keyframes drift { 50% { transform: translate(6vw, 4vh) scale(1.1); } }
   .grid {
     position: absolute; inset: 0; pointer-events: none;
-    background-image: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-image: linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
     background-size: 48px 48px;
     mask-image: radial-gradient(ellipse at 40% 50%, #000 20%, transparent 70%);
     -webkit-mask-image: radial-gradient(ellipse at 40% 50%, #000 20%, transparent 70%);

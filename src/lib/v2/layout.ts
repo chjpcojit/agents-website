@@ -65,3 +65,51 @@ export function pointOnQuad(a: Point, c: Point, b: Point, k: number): Point {
   const u = 1 - k;
   return { x: u * u * a.x + 2 * u * k * c.x + k * k * b.x, y: u * u * a.y + 2 * u * k * c.y + k * k * b.y };
 }
+
+// Data stores the agents touch, pinned to the four corners of the stage.
+// Các kho dữ liệu mà agent truy xuất, ghim ở bốn góc của stage.
+export type StoreId = 'repo' | 'github' | 'transcript' | 'db';
+
+export interface DataStore extends Point {
+  id: StoreId;
+  name: string;
+  path: string;
+}
+
+export const STORES: DataStore[] = [
+  { id: 'repo', name: 'Git worktrees', path: '~/work/*/wt', x: 70, y: 64 },
+  { id: 'github', name: 'GitHub', path: 'origin · PR', x: 930, y: 64 },
+  { id: 'transcript', name: 'Transcripts', path: '~/.claude/projects', x: 70, y: 660 },
+  { id: 'db', name: 'Orchestrator DB', path: 'SQLite · data.db', x: 930, y: 660 },
+];
+
+/** Direction of a data access: read flows store → agent, write flows agent → store. / Chiều truy xuất: read đi kho → agent, write đi agent → kho. */
+export type AccessOp = 'read' | 'write';
+
+/**
+ * Map one stream event to the store it touches, mirroring what Claude Code really does on disk.
+ * Ánh xạ một stream event sang kho nó chạm tới, bám theo những gì Claude Code thực sự làm trên đĩa.
+ */
+export function storeAccess(kind: string, text: string): { store: StoreId; op: AccessOp } | null {
+  if (kind === 'tool_call') {
+    if (/^(Read|Grep|Glob)\b/.test(text)) return { store: 'repo', op: 'read' };
+    if (/^(Edit|Write)\b/.test(text)) return { store: 'repo', op: 'write' };
+    if (/^Bash\b.*\b(git push|gh )/.test(text)) return { store: 'github', op: 'write' };
+    if (/^Bash\b.*\b(git (fetch|pull)|gh pr view)/.test(text)) return { store: 'github', op: 'read' };
+    if (/^Bash\b/.test(text)) return { store: 'repo', op: 'read' };
+    return null;
+  }
+  // Session resume / compact read the transcript; every assistant turn is appended to it.
+  // Resume / compact đọc transcript; mỗi lượt assistant được ghi nối vào transcript.
+  if (kind === 'system' && /resum|compact/.test(text)) return { store: 'transcript', op: 'read' };
+  if (kind === 'assistant') return { store: 'transcript', op: 'write' };
+  return null;
+}
+
+/** Curve between two points that bows away from the core, so beams don't all cross the centre. / Đường cong giữa hai điểm, phình ra xa core để các tia không cùng cắt qua tâm. */
+export function curveAwayFromCore(a: Point, b: Point, push = 0.35): { c: Point; d: string } {
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const c = { x: mx + (mx - CORE.x) * push, y: my + (my - CORE.y) * push };
+  return { c, d: `M${a.x},${a.y} Q${c.x},${c.y} ${b.x},${b.y}` };
+}

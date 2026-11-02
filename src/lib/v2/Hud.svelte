@@ -35,7 +35,7 @@
     background: conic-gradient(from 0deg, #fff, rgba(255,255,255,0.15), #fff);
     box-shadow: none; position: relative; animation: spin 8s linear infinite;
   }
-  .mark::after { content: ''; position: absolute; inset: 5px; border-radius: 50%; background: #08090b; }
+  .mark::after { content: ''; position: absolute; inset: 5px; border-radius: 50%; background: #1b1d23; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .brand b { font: 700 16px 'Space Grotesk', sans-serif; letter-spacing: 3px; display: block; }
   .brand b span { color: #7c808a; }

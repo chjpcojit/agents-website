@@ -295,6 +295,7 @@ export class OfficeStore {
     const risky = cmds.find((c) => c.risk === 'high');
     const steps: Step[] = [
       { kind: 'stream', type: 'system', text: `session resumed · claude -p --resume ${a.sessionId}` },
+      { kind: 'stream', type: 'tool_call', text: 'Bash git fetch origin main' },
       { kind: 'stream', type: 'assistant', text: `Đã nhận "${t.title}". Em đọc code liên quan trước.` },
       { kind: 'stream', type: 'tool_call', text: `Grep "${t.title.split(' ').slice(-2).join(' ')}" ./` },
       { kind: 'stream', type: 'tool_result', text: `${2 + Math.floor(Math.random() * 6)} matches` },
@@ -321,6 +322,10 @@ export class OfficeStore {
       return steps;
     }
     steps.push({ kind: 'stream', type: 'tool_result', text: 'ok · all checks passed' });
+    // Push the dated task branch and open a PR (merging stays with the human).
+    // Push branch task có ngày tháng và mở PR (việc merge vẫn do người duyệt).
+    steps.push({ kind: 'stream', type: 'tool_call', text: `Bash git push -u origin ${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${a.id}-task` });
+    steps.push({ kind: 'stream', type: 'tool_result', text: 'pushed · PR opened' });
     steps.push({ kind: 'stream', type: 'assistant', text: `Xong "${t.title}". Em đã để summary trong task log.` });
     steps.push({ kind: 'done' });
     return steps;

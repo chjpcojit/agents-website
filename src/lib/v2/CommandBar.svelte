@@ -58,7 +58,7 @@
   .bar {
     position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 10px;
     width: min(680px, 100%); margin: 0 auto; border-radius: 999px;
-    background: rgba(18, 19, 23, 0.8); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+    background: rgba(40, 43, 50, 0.75); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
   }
@@ -66,7 +66,7 @@
   .to { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); }
   .to i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.6); }
   select { background: transparent; border: 0; color: #eef1ff; font: 600 13px 'Space Grotesk', sans-serif; outline: none; cursor: pointer; }
-  select option { background: #141519; }
+  select option { background: #24272e; }
   input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: #eef1ff; font: 400 14.5px 'Space Grotesk', sans-serif; padding: 8px 4px; }
   input::placeholder { color: rgba(255, 255, 255, 0.32); }
   kbd { font: 10px 'JetBrains Mono', monospace; color: var(--h-muted); border: 1px solid var(--h-line); border-radius: 6px; padding: 2px 6px; }
